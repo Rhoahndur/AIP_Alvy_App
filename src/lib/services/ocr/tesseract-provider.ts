@@ -17,7 +17,19 @@ export class TesseractOCRProvider implements OCRProvider {
     const worker = await getWorker();
     const { data } = await worker.recognize(preprocessed);
 
-    const regions: TextRegion[] = (data.words || []).map((word) => ({
+    // Flatten the nested block→paragraph→line→word hierarchy
+    const words: Array<{ text: string; confidence: number; bbox: { x0: number; y0: number; x1: number; y1: number } }> = [];
+    for (const block of data.blocks || []) {
+      for (const paragraph of block.paragraphs) {
+        for (const line of paragraph.lines) {
+          for (const word of line.words) {
+            words.push(word);
+          }
+        }
+      }
+    }
+
+    const regions: TextRegion[] = words.map((word) => ({
       text: word.text,
       confidence: word.confidence / 100,
       bbox: {

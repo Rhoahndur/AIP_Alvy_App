@@ -76,9 +76,9 @@ export class AlgorithmicMatchingEngine implements MatchingEngine {
     }
 
     // Fuzzy match fields
-    const fuzzyFields: Array<{ name: keyof ParsedLabelFields & keyof ApplicationFields }> = [
+    const fuzzyFields = [
       'brandName', 'classType', 'nameAddress', 'countryOfOrigin',
-    ];
+    ] as const;
 
     for (const fieldName of fuzzyFields) {
       const exp = expected[fieldName];
