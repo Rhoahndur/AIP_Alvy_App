@@ -1,0 +1,10 @@
+{
+  "functions": {
+    "src/app/api/verify/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/applications/batch/route.ts": {
+      "maxDuration": 30
+    }
+  }
+}
