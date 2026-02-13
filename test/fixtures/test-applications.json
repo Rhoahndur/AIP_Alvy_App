@@ -1,0 +1,192 @@
+[
+  {
+    "id": "S1",
+    "scenario": "Spirits - Clean Pass",
+    "expectedOutcome": "ALL_MATCH",
+    "data": {
+      "image_filename": "S1_bourbon_clean.png",
+      "beverage_type": "SPIRITS",
+      "brand_name": "OLD TOM DISTILLERY",
+      "class_type": "Kentucky Straight Bourbon Whiskey",
+      "alcohol_content": "45% Alc./Vol. (90 Proof)",
+      "net_contents": "750 mL",
+      "name_address": "Old Tom Distillery, 1234 Barrel Lane, Louisville, KY 40202",
+      "government_warning": "GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink alcoholic beverages during pregnancy because of the risk of birth defects. (2) Consumption of alcoholic beverages impairs your ability to drive a car or operate machinery, and may cause health problems.",
+      "country_of_origin": null,
+      "appellation": null,
+      "varietal": null,
+      "vintage": null
+    }
+  },
+  {
+    "id": "S2",
+    "scenario": "Spirits - Clear Failures (wrong ABV + title case warning)",
+    "expectedOutcome": "FAIL",
+    "expectedFailures": ["alcohol_content", "government_warning"],
+    "data": {
+      "image_filename": "S2_bourbon_fail.png",
+      "beverage_type": "SPIRITS",
+      "brand_name": "OLD TOM DISTILLERY",
+      "class_type": "Kentucky Straight Bourbon Whiskey",
+      "alcohol_content": "45% Alc./Vol. (90 Proof)",
+      "net_contents": "750 mL",
+      "name_address": "Old Tom Distillery, 1234 Barrel Lane, Louisville, KY 40202",
+      "government_warning": "GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink alcoholic beverages during pregnancy because of the risk of birth defects. (2) Consumption of alcoholic beverages impairs your ability to drive a car or operate machinery, and may cause health problems.",
+      "country_of_origin": null,
+      "appellation": null,
+      "varietal": null,
+      "vintage": null
+    },
+    "labelDifferences": {
+      "alcohol_content": "40% Alc./Vol. (80 Proof)",
+      "government_warning": "Government Warning: (title case, not all caps)"
+    }
+  },
+  {
+    "id": "S3",
+    "scenario": "Spirits - Pass After Preprocessing (low contrast + rotated)",
+    "expectedOutcome": "ALL_MATCH",
+    "data": {
+      "image_filename": "S3_bourbon_degraded.png",
+      "beverage_type": "SPIRITS",
+      "brand_name": "OLD TOM DISTILLERY",
+      "class_type": "Kentucky Straight Bourbon Whiskey",
+      "alcohol_content": "45% Alc./Vol. (90 Proof)",
+      "net_contents": "750 mL",
+      "name_address": "Old Tom Distillery, 1234 Barrel Lane, Louisville, KY 40202",
+      "government_warning": "GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink alcoholic beverages during pregnancy because of the risk of birth defects. (2) Consumption of alcoholic beverages impairs your ability to drive a car or operate machinery, and may cause health problems.",
+      "country_of_origin": null,
+      "appellation": null,
+      "varietal": null,
+      "vintage": null
+    },
+    "imageNotes": "Low contrast (~60%), rotated 5-10 degrees, slight Gaussian blur"
+  },
+  {
+    "id": "W1",
+    "scenario": "Wine - Clean Pass",
+    "expectedOutcome": "ALL_MATCH",
+    "data": {
+      "image_filename": "W1_wine_clean.png",
+      "beverage_type": "WINE",
+      "brand_name": "WILLAMETTE RESERVE",
+      "class_type": "Pinot Noir",
+      "alcohol_content": "13.5% Alc./Vol.",
+      "net_contents": "750 mL",
+      "name_address": "Willamette Reserve Winery, 567 Vine Road, Dundee, OR 97115",
+      "government_warning": "GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink alcoholic beverages during pregnancy because of the risk of birth defects. (2) Consumption of alcoholic beverages impairs your ability to drive a car or operate machinery, and may cause health problems.",
+      "country_of_origin": null,
+      "appellation": "Willamette Valley",
+      "varietal": "Pinot Noir",
+      "vintage": "2021"
+    }
+  },
+  {
+    "id": "W2",
+    "scenario": "Wine - Missing Appellation + Wrong Vintage",
+    "expectedOutcome": "FAIL",
+    "expectedFailures": ["appellation", "vintage"],
+    "data": {
+      "image_filename": "W2_wine_fail.png",
+      "beverage_type": "WINE",
+      "brand_name": "WILLAMETTE RESERVE",
+      "class_type": "Pinot Noir",
+      "alcohol_content": "13.5% Alc./Vol.",
+      "net_contents": "750 mL",
+      "name_address": "Willamette Reserve Winery, 567 Vine Road, Dundee, OR 97115",
+      "government_warning": "GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink alcoholic beverages during pregnancy because of the risk of birth defects. (2) Consumption of alcoholic beverages impairs your ability to drive a car or operate machinery, and may cause health problems.",
+      "country_of_origin": null,
+      "appellation": "Willamette Valley",
+      "varietal": "Pinot Noir",
+      "vintage": "2021"
+    },
+    "labelDifferences": {
+      "appellation": "(missing from label entirely)",
+      "vintage": "2019"
+    }
+  },
+  {
+    "id": "W3",
+    "scenario": "Wine - Pass After Preprocessing (overexposed + glare)",
+    "expectedOutcome": "ALL_MATCH",
+    "data": {
+      "image_filename": "W3_wine_degraded.png",
+      "beverage_type": "WINE",
+      "brand_name": "WILLAMETTE RESERVE",
+      "class_type": "Pinot Noir",
+      "alcohol_content": "13.5% Alc./Vol.",
+      "net_contents": "750 mL",
+      "name_address": "Willamette Reserve Winery, 567 Vine Road, Dundee, OR 97115",
+      "government_warning": "GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink alcoholic beverages during pregnancy because of the risk of birth defects. (2) Consumption of alcoholic beverages impairs your ability to drive a car or operate machinery, and may cause health problems.",
+      "country_of_origin": null,
+      "appellation": "Willamette Valley",
+      "varietal": "Pinot Noir",
+      "vintage": "2021"
+    },
+    "imageNotes": "Overexposed (brightness +40%), white glare spot, slight color wash"
+  },
+  {
+    "id": "M1",
+    "scenario": "Malt Beverage - Clean Pass",
+    "expectedOutcome": "ALL_MATCH",
+    "data": {
+      "image_filename": "M1_beer_clean.png",
+      "beverage_type": "MALT_BEVERAGE",
+      "brand_name": "STONE'S THROW BREWING",
+      "class_type": "India Pale Ale",
+      "alcohol_content": "6.8% Alc./Vol.",
+      "net_contents": "12 FL OZ",
+      "name_address": "Stone's Throw Brewing Co., 890 Hop Street, Portland, OR 97209",
+      "government_warning": "GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink alcoholic beverages during pregnancy because of the risk of birth defects. (2) Consumption of alcoholic beverages impairs your ability to drive a car or operate machinery, and may cause health problems.",
+      "country_of_origin": null,
+      "appellation": null,
+      "varietal": null,
+      "vintage": null
+    }
+  },
+  {
+    "id": "M2",
+    "scenario": "Malt Beverage - Fuzzy Match Brand + Missing Warning",
+    "expectedOutcome": "FAIL",
+    "expectedFailures": ["government_warning"],
+    "expectedPartials": ["brand_name"],
+    "data": {
+      "image_filename": "M2_beer_fail.png",
+      "beverage_type": "MALT_BEVERAGE",
+      "brand_name": "Stone's Throw Brewing",
+      "class_type": "India Pale Ale",
+      "alcohol_content": "6.8% Alc./Vol.",
+      "net_contents": "12 FL OZ",
+      "name_address": "Stone's Throw Brewing Co., 890 Hop Street, Portland, OR 97209",
+      "government_warning": "GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink alcoholic beverages during pregnancy because of the risk of birth defects. (2) Consumption of alcoholic beverages impairs your ability to drive a car or operate machinery, and may cause health problems.",
+      "country_of_origin": null,
+      "appellation": null,
+      "varietal": null,
+      "vintage": null
+    },
+    "labelDifferences": {
+      "brand_name": "STONE'S THROW BREWING (all caps on label, mixed case in application)",
+      "government_warning": "(completely absent from label)"
+    }
+  },
+  {
+    "id": "M3",
+    "scenario": "Malt Beverage - Pass After Preprocessing (rotated + skewed)",
+    "expectedOutcome": "ALL_MATCH",
+    "data": {
+      "image_filename": "M3_beer_degraded.png",
+      "beverage_type": "MALT_BEVERAGE",
+      "brand_name": "STONE'S THROW BREWING",
+      "class_type": "India Pale Ale",
+      "alcohol_content": "6.8% Alc./Vol.",
+      "net_contents": "12 FL OZ",
+      "name_address": "Stone's Throw Brewing Co., 890 Hop Street, Portland, OR 97209",
+      "government_warning": "GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink alcoholic beverages during pregnancy because of the risk of birth defects. (2) Consumption of alcoholic beverages impairs your ability to drive a car or operate machinery, and may cause health problems.",
+      "country_of_origin": null,
+      "appellation": null,
+      "varietal": null,
+      "vintage": null
+    },
+    "imageNotes": "Rotated 15 degrees, perspective skew, slight barrel distortion"
+  }
+]
