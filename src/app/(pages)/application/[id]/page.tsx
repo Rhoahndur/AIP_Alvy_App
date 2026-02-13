@@ -7,6 +7,7 @@ import Button from '@/components/ui/button';
 import StatusBadge from '@/components/ui/status-badge';
 import MatchIndicator from '@/components/ui/match-indicator';
 import ImageViewer from '@/components/ui/image-viewer';
+import ConfirmDialog from '@/components/ui/confirm-dialog';
 import { useToast } from '@/components/ui/toast';
 import { api, ApiError } from '@/lib/api/client';
 import { FIELD_LABELS, BEVERAGE_TYPE_LABELS } from '@/lib/constants';
@@ -28,6 +29,7 @@ export default function ApplicationDetailPage() {
   const [submittingReview, setSubmittingReview] = useState(false);
   const [overrides, setOverrides] = useState<Record<string, { result: MatchResult; reason: string }>>({});
   const [agentNotes, setAgentNotes] = useState('');
+  const [confirmAction, setConfirmAction] = useState<'MANUAL_PASS' | 'MANUAL_FAIL' | null>(null);
 
   const fetchApplication = useCallback(async () => {
     try {
@@ -342,14 +344,14 @@ export default function ApplicationDetailPage() {
           <div className="flex gap-3">
             <Button
               variant="primary"
-              onClick={() => handleSubmitReview('MANUAL_PASS')}
+              onClick={() => setConfirmAction('MANUAL_PASS')}
               loading={submittingReview}
             >
               Approve (Manual Pass)
             </Button>
             <Button
               variant="danger"
-              onClick={() => handleSubmitReview('MANUAL_FAIL')}
+              onClick={() => setConfirmAction('MANUAL_FAIL')}
               loading={submittingReview}
             >
               Reject (Manual Fail)
@@ -360,6 +362,22 @@ export default function ApplicationDetailPage() {
           )}
         </div>
       )}
+
+      {/* Confirmation dialog */}
+      <ConfirmDialog
+        open={confirmAction !== null}
+        title={confirmAction === 'MANUAL_PASS' ? 'Approve Application' : 'Reject Application'}
+        message={confirmAction === 'MANUAL_PASS'
+          ? 'Are you sure you want to approve this application? This will mark it as manually passed.'
+          : 'Are you sure you want to reject this application? This will mark it as manually failed.'}
+        confirmLabel={confirmAction === 'MANUAL_PASS' ? 'Approve' : 'Reject'}
+        confirmVariant={confirmAction === 'MANUAL_PASS' ? 'primary' : 'danger'}
+        onConfirm={() => {
+          if (confirmAction) handleSubmitReview(confirmAction);
+          setConfirmAction(null);
+        }}
+        onCancel={() => setConfirmAction(null)}
+      />
     </div>
   );
 }

@@ -6,6 +6,7 @@ import PageHeader from '@/components/layout/page-header';
 import Button from '@/components/ui/button';
 import StatusBadge from '@/components/ui/status-badge';
 import { useToast } from '@/components/ui/toast';
+import { TableSkeleton } from '@/components/ui/skeleton';
 import { api, ApiError } from '@/lib/api/client';
 import { BEVERAGE_TYPE_LABELS } from '@/lib/constants';
 
@@ -106,7 +107,7 @@ export default function QueuePage() {
     return (
       <div>
         <PageHeader title="Verification Queue" description="Pending applications awaiting verification" />
-        <div className="text-center py-12 text-gray-500">Loading...</div>
+        <TableSkeleton rows={5} cols={6} />
       </div>
     );
   }

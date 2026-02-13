@@ -5,6 +5,7 @@ import Link from 'next/link';
 import PageHeader from '@/components/layout/page-header';
 import StatusBadge from '@/components/ui/status-badge';
 import MatchIndicator from '@/components/ui/match-indicator';
+import { TableSkeleton } from '@/components/ui/skeleton';
 import { api } from '@/lib/api/client';
 import { BEVERAGE_TYPE_LABELS } from '@/lib/constants';
 
@@ -86,7 +87,7 @@ export default function HistoryPage() {
       </div>
 
       {loading ? (
-        <div className="text-center py-12 text-gray-500">Loading...</div>
+        <TableSkeleton rows={5} cols={7} />
       ) : applications.length === 0 ? (
         <div className="text-center py-16 bg-white rounded-lg border border-gray-200">
           <h3 className="text-lg font-medium text-gray-900 mb-1">No verified applications yet</h3>
