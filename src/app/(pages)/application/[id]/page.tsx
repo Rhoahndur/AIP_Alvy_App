@@ -7,6 +7,8 @@ import Button from '@/components/ui/button';
 import StatusBadge from '@/components/ui/status-badge';
 import MatchIndicator from '@/components/ui/match-indicator';
 import ImageViewer from '@/components/ui/image-viewer';
+import { useToast } from '@/components/ui/toast';
+import { api, ApiError } from '@/lib/api/client';
 import { FIELD_LABELS, BEVERAGE_TYPE_LABELS } from '@/lib/constants';
 import type { ApplicationDetail } from '@/lib/types/application';
 
@@ -15,23 +17,24 @@ type MatchResult = 'MATCH' | 'MISMATCH' | 'PARTIAL' | 'NOT_FOUND';
 export default function ApplicationDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const { toast } = useToast();
   const id = params.id as string;
 
   const [app, setApp] = useState<ApplicationDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [verifying, setVerifying] = useState(false);
+  const [verifyElapsed, setVerifyElapsed] = useState(0);
   const [submittingReview, setSubmittingReview] = useState(false);
   const [overrides, setOverrides] = useState<Record<string, { result: MatchResult; reason: string }>>({});
   const [agentNotes, setAgentNotes] = useState('');
 
   const fetchApplication = useCallback(async () => {
     try {
-      const res = await fetch(`/api/applications/${id}`);
-      if (!res.ok) throw new Error('Application not found');
-      const data = await res.json();
+      const data = await api.get<ApplicationDetail>(`/api/applications/${id}`);
       setApp(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load');
+      setError(err instanceof ApiError ? err.message : 'Failed to load application');
     } finally {
       setLoading(false);
     }
@@ -41,6 +44,44 @@ export default function ApplicationDetailPage() {
     fetchApplication();
   }, [fetchApplication]);
 
+  // Timer for verification elapsed time
+  useEffect(() => {
+    if (!verifying) return;
+    const interval = setInterval(() => {
+      setVerifyElapsed((prev) => prev + 100);
+    }, 100);
+    return () => clearInterval(interval);
+  }, [verifying]);
+
+  const handleVerify = async () => {
+    setVerifying(true);
+    setVerifyElapsed(0);
+    try {
+      const result = await api.post<{
+        processed: number;
+        results: Array<{ overallResult: string; processingTimeMs: number }>;
+        errors?: Array<{ error: string }>;
+      }>('/api/verify', { applicationIds: [id] });
+
+      if (result.processed > 0) {
+        const r = result.results[0];
+        toast(
+          r.overallResult === 'AUTO_PASS' ? 'success' : 'info',
+          `Verification complete: ${r.overallResult.replace('_', ' ')} (${(r.processingTimeMs / 1000).toFixed(1)}s)`
+        );
+      }
+      if (result.errors && result.errors.length > 0) {
+        toast('error', result.errors[0].error);
+      }
+      // Refresh to show results
+      await fetchApplication();
+    } catch (err) {
+      toast('error', err instanceof ApiError ? err.message : 'Verification failed');
+    } finally {
+      setVerifying(false);
+    }
+  };
+
   const handleOverride = (fieldId: string, result: MatchResult, reason: string) => {
     setOverrides((prev) => ({ ...prev, [fieldId]: { result, reason } }));
   };
@@ -49,26 +90,21 @@ export default function ApplicationDetailPage() {
     setSubmittingReview(true);
     setError(null);
     try {
-      const res = await fetch(`/api/applications/${id}/review`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          overallResult: decision,
-          agentNotes,
-          fieldOverrides: Object.entries(overrides).map(([fieldId, o]) => ({
-            fieldId,
-            result: o.result,
-            reason: o.reason,
-          })),
-        }),
+      await api.post(`/api/applications/${id}/review`, {
+        overallResult: decision,
+        agentNotes,
+        fieldOverrides: Object.entries(overrides).map(([fieldId, o]) => ({
+          fieldId,
+          result: o.result,
+          reason: o.reason,
+        })),
       });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Review submission failed');
-      }
+      toast('success', `Application ${decision === 'MANUAL_PASS' ? 'approved' : 'rejected'}`);
       router.push('/history');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Review failed');
+      const msg = err instanceof ApiError ? err.message : 'Review failed';
+      setError(msg);
+      toast('error', msg);
     } finally {
       setSubmittingReview(false);
     }
@@ -83,19 +119,22 @@ export default function ApplicationDetailPage() {
     );
   }
 
-  if (error || !app) {
+  if (error && !app) {
     return (
       <div>
         <PageHeader title="Application Detail" />
         <div className="text-center py-12">
-          <p className="text-red-600 mb-4">{error || 'Application not found'}</p>
+          <p className="text-red-600 mb-4">{error}</p>
           <Button variant="secondary" onClick={() => router.back()}>Go Back</Button>
         </div>
       </div>
     );
   }
 
+  if (!app) return null;
+
   const vr = app.verificationResult;
+  const isPending = app.status === 'PENDING';
   const isReviewable = app.status === 'VERIFIED' && vr;
 
   return (
@@ -113,9 +152,26 @@ export default function ApplicationDetailPage() {
                 {vr.overallResult.replace('_', ' ')}
               </span>
             )}
+            {isPending && (
+              <Button onClick={handleVerify} loading={verifying}>
+                {verifying ? `Verifying... (${(verifyElapsed / 1000).toFixed(1)}s)` : 'Verify Now'}
+              </Button>
+            )}
           </div>
         }
       />
+
+      {/* Verification in progress overlay */}
+      {verifying && (
+        <div className="mb-6 p-6 bg-indigo-50 border border-indigo-200 rounded-lg text-center">
+          <svg className="animate-spin h-8 w-8 text-indigo-600 mx-auto mb-3" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          <p className="text-indigo-800 font-medium">Processing label verification...</p>
+          <p className="text-indigo-600 text-sm mt-1">Elapsed: {(verifyElapsed / 1000).toFixed(1)}s</p>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left: Label Image */}
@@ -127,7 +183,6 @@ export default function ApplicationDetailPage() {
 
         {/* Right: Application Data */}
         <div className="space-y-6">
-          {/* Application Fields */}
           <div className="bg-white rounded-lg border border-gray-200 p-4">
             <h2 className="text-sm font-medium text-gray-700 mb-3">Application Data</h2>
             <dl className="space-y-2">
@@ -144,7 +199,6 @@ export default function ApplicationDetailPage() {
             </dl>
           </div>
 
-          {/* Verification Metrics */}
           {vr && (
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <h2 className="text-sm font-medium text-gray-700 mb-3">Verification Metrics</h2>
@@ -160,6 +214,17 @@ export default function ApplicationDetailPage() {
               </div>
             </div>
           )}
+
+          {/* Pending state — no results yet */}
+          {isPending && !verifying && (
+            <div className="bg-amber-50 rounded-lg border border-amber-200 p-6 text-center">
+              <svg className="mx-auto h-10 w-10 text-amber-400 mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-amber-800 font-medium">Awaiting Verification</p>
+              <p className="text-amber-600 text-sm mt-1">Click &ldquo;Verify Now&rdquo; to run the OCR pipeline on this label.</p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -169,79 +234,81 @@ export default function ApplicationDetailPage() {
           <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
             <h2 className="text-sm font-medium text-gray-700">Field-by-Field Comparison</h2>
           </div>
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Field</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Expected</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Extracted</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Result</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Confidence</th>
-                {isReviewable && (
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Override</th>
-                )}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {vr.fieldResults.map((fr) => {
-                const override = overrides[fr.id];
-                const displayResult = fr.agentOverride || (override?.result) || fr.autoResult;
-                return (
-                  <tr key={fr.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                      {FIELD_LABELS[fr.fieldName] || fr.fieldName}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600 max-w-[200px] truncate" title={fr.expectedValue}>
-                      {fr.expectedValue}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600 max-w-[200px] truncate" title={fr.extractedValue || 'Not found'}>
-                      {fr.extractedValue || <span className="italic text-gray-400">Not found</span>}
-                    </td>
-                    <td className="px-4 py-3">
-                      <MatchIndicator result={displayResult} confidence={fr.confidence} />
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-500">
-                      {Math.round(fr.confidence * 100)}%
-                    </td>
-                    {isReviewable && (
-                      <td className="px-4 py-3">
-                        <select
-                          value={override?.result || ''}
-                          onChange={(e) => {
-                            const val = e.target.value as MatchResult | '';
-                            if (!val) {
-                              setOverrides((prev) => {
-                                const next = { ...prev };
-                                delete next[fr.id];
-                                return next;
-                              });
-                            } else {
-                              handleOverride(fr.id, val, override?.reason || '');
-                            }
-                          }}
-                          className="text-xs rounded border-gray-300 py-1"
-                        >
-                          <option value="">—</option>
-                          <option value="MATCH">Match</option>
-                          <option value="MISMATCH">Mismatch</option>
-                          <option value="PARTIAL">Partial</option>
-                        </select>
-                        {override && (
-                          <input
-                            type="text"
-                            placeholder="Reason"
-                            value={override.reason}
-                            onChange={(e) => handleOverride(fr.id, override.result, e.target.value)}
-                            className="mt-1 w-full text-xs rounded border-gray-300 py-1"
-                          />
-                        )}
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Field</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Expected</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Extracted</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Result</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Confidence</th>
+                  {isReviewable && (
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Override</th>
+                  )}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {vr.fieldResults.map((fr) => {
+                  const override = overrides[fr.id];
+                  const displayResult = fr.agentOverride || override?.result || fr.autoResult;
+                  return (
+                    <tr key={fr.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                        {FIELD_LABELS[fr.fieldName] || fr.fieldName}
                       </td>
-                    )}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      <td className="px-4 py-3 text-sm text-gray-600 max-w-[200px] truncate" title={fr.expectedValue}>
+                        {fr.expectedValue}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600 max-w-[200px] truncate" title={fr.extractedValue || 'Not found'}>
+                        {fr.extractedValue || <span className="italic text-gray-400">Not found</span>}
+                      </td>
+                      <td className="px-4 py-3">
+                        <MatchIndicator result={displayResult} confidence={fr.confidence} />
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-500">
+                        {Math.round(fr.confidence * 100)}%
+                      </td>
+                      {isReviewable && (
+                        <td className="px-4 py-3">
+                          <select
+                            value={override?.result || ''}
+                            onChange={(e) => {
+                              const val = e.target.value as MatchResult | '';
+                              if (!val) {
+                                setOverrides((prev) => {
+                                  const next = { ...prev };
+                                  delete next[fr.id];
+                                  return next;
+                                });
+                              } else {
+                                handleOverride(fr.id, val, override?.reason || '');
+                              }
+                            }}
+                            className="text-xs rounded border-gray-300 py-1"
+                          >
+                            <option value="">—</option>
+                            <option value="MATCH">Match</option>
+                            <option value="MISMATCH">Mismatch</option>
+                            <option value="PARTIAL">Partial</option>
+                          </select>
+                          {override && (
+                            <input
+                              type="text"
+                              placeholder="Reason"
+                              value={override.reason}
+                              onChange={(e) => handleOverride(fr.id, override.result, e.target.value)}
+                              className="mt-1 w-full text-xs rounded border-gray-300 py-1"
+                            />
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

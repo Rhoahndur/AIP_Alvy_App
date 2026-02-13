@@ -5,6 +5,8 @@ import Link from 'next/link';
 import PageHeader from '@/components/layout/page-header';
 import Button from '@/components/ui/button';
 import StatusBadge from '@/components/ui/status-badge';
+import { useToast } from '@/components/ui/toast';
+import { api, ApiError } from '@/lib/api/client';
 import { BEVERAGE_TYPE_LABELS } from '@/lib/constants';
 
 interface QueueItem {
@@ -18,20 +20,27 @@ interface QueueItem {
   batchId: string | null;
 }
 
+interface VerifyResult {
+  processed: number;
+  failed: number;
+  results: Array<{ id: string; overallResult: string; processingTimeMs: number }>;
+  errors?: Array<{ id: string; error: string }>;
+}
+
 export default function QueuePage() {
+  const { toast } = useToast();
   const [applications, setApplications] = useState<QueueItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [verifying, setVerifying] = useState(false);
+  const [verifyProgress, setVerifyProgress] = useState<{ current: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const fetchQueue = useCallback(async () => {
     try {
-      const res = await fetch('/api/applications?status=PENDING');
-      if (!res.ok) throw new Error('Failed to load queue');
-      const data = await res.json();
+      const data = await api.get<{ data: QueueItem[] }>('/api/applications?status=PENDING');
       setApplications(data.data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load');
+      setError(err instanceof ApiError ? err.message : 'Failed to load queue');
     } finally {
       setLoading(false);
     }
@@ -41,25 +50,56 @@ export default function QueuePage() {
     fetchQueue();
   }, [fetchQueue]);
 
-  const handleVerifyAll = async () => {
-    setVerifying(true);
-    setError(null);
+  const handleVerifySingle = async (appId: string) => {
     try {
-      const res = await fetch('/api/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ applicationIds: applications.map((a) => a.id) }),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Verification failed');
+      const result = await api.post<VerifyResult>('/api/verify', { applicationIds: [appId] });
+      if (result.processed > 0) {
+        const r = result.results[0];
+        toast(
+          r.overallResult === 'AUTO_PASS' ? 'success' : 'info',
+          `Verified: ${r.overallResult.replace('_', ' ')} (${(r.processingTimeMs / 1000).toFixed(1)}s)`
+        );
+      }
+      if (result.failed > 0) {
+        toast('error', `Verification failed: ${result.errors?.[0]?.error || 'Unknown error'}`);
       }
       await fetchQueue();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Verification failed');
-    } finally {
-      setVerifying(false);
+      toast('error', err instanceof ApiError ? err.message : 'Verification failed');
     }
+  };
+
+  const handleVerifyAll = async () => {
+    setVerifying(true);
+    setError(null);
+    const total = applications.length;
+    setVerifyProgress({ current: 0, total });
+
+    let passed = 0;
+    let failed = 0;
+
+    // Process one at a time for progress tracking
+    for (let i = 0; i < applications.length; i++) {
+      setVerifyProgress({ current: i + 1, total });
+      try {
+        const result = await api.post<VerifyResult>('/api/verify', {
+          applicationIds: [applications[i].id],
+        });
+        if (result.processed > 0 && result.results[0].overallResult === 'AUTO_PASS') {
+          passed++;
+        } else {
+          failed++;
+        }
+        if (result.failed > 0) failed++;
+      } catch {
+        failed++;
+      }
+    }
+
+    setVerifying(false);
+    setVerifyProgress(null);
+    toast('success', `Verification complete: ${passed} passed, ${failed} failed out of ${total}`);
+    await fetchQueue();
   };
 
   if (loading) {
@@ -79,11 +119,29 @@ export default function QueuePage() {
         actions={
           applications.length > 0 ? (
             <Button onClick={handleVerifyAll} loading={verifying}>
-              Verify All ({applications.length})
+              {verifyProgress
+                ? `Verifying ${verifyProgress.current} of ${verifyProgress.total}...`
+                : `Verify All (${applications.length})`}
             </Button>
           ) : undefined
         }
       />
+
+      {/* Progress bar during verification */}
+      {verifyProgress && (
+        <div className="mb-6">
+          <div className="flex items-center justify-between text-sm text-gray-600 mb-1">
+            <span>Processing applications...</span>
+            <span>{verifyProgress.current} / {verifyProgress.total}</span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2">
+            <div
+              className="bg-indigo-600 h-2 rounded-full transition-all duration-300"
+              style={{ width: `${(verifyProgress.current / verifyProgress.total) * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700" role="alert">
@@ -112,7 +170,7 @@ export default function QueuePage() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Class</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Submitted</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -123,10 +181,18 @@ export default function QueuePage() {
                   <td className="px-6 py-4 text-sm text-gray-600">{app.classType}</td>
                   <td className="px-6 py-4"><StatusBadge status={app.status} /></td>
                   <td className="px-6 py-4 text-sm text-gray-500">{new Date(app.createdAt).toLocaleDateString()}</td>
-                  <td className="px-6 py-4 text-right">
+                  <td className="px-6 py-4 text-right flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleVerifySingle(app.id)}
+                      disabled={verifying}
+                      className="text-indigo-600 hover:text-indigo-800 text-sm font-medium disabled:opacity-50"
+                    >
+                      Verify
+                    </button>
                     <Link
                       href={`/application/${app.id}`}
-                      className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
+                      className="text-gray-500 hover:text-gray-700 text-sm"
                     >
                       View
                     </Link>

@@ -6,12 +6,15 @@ import PageHeader from '@/components/layout/page-header';
 import Button from '@/components/ui/button';
 import FileUpload from '@/components/ui/file-upload';
 import BeverageTypeSelector from '@/components/forms/beverage-type-selector';
+import { useToast } from '@/components/ui/toast';
+import { api, ApiError } from '@/lib/api/client';
 import { FIELD_LABELS, UNIVERSAL_FIELDS, WINE_ONLY_FIELDS } from '@/lib/constants';
 
 type SubmitMode = 'single' | 'batch';
 
 export default function SubmitPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [mode, setMode] = useState<SubmitMode>('single');
   const [beverageType, setBeverageType] = useState('');
   const [imageFiles, setImageFiles] = useState<File[]>([]);
@@ -45,15 +48,13 @@ export default function SubmitPage() {
         body.append(key, value);
       }
 
-      const res = await fetch('/api/applications', { method: 'POST', body });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to submit application');
-      }
-
+      await api.post('/api/applications', body);
+      toast('success', 'Application submitted successfully');
       router.push('/queue');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Submission failed');
+      const msg = err instanceof ApiError ? err.message : 'Submission failed';
+      setError(msg);
+      toast('error', msg);
     } finally {
       setSubmitting(false);
     }
@@ -75,16 +76,16 @@ export default function SubmitPage() {
         body.append('images', file);
       }
 
-      const res = await fetch('/api/applications/batch', { method: 'POST', body });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Batch upload failed');
+      const result = await api.post<{ batchId: string; created: number; warnings: string[] }>('/api/applications/batch', body);
+      toast('success', `Batch uploaded: ${result.created} applications created`);
+      if (result.warnings.length > 0) {
+        toast('info', `${result.warnings.length} warning(s) during import`);
       }
-
-      const result = await res.json();
       router.push(`/queue?batch=${result.batchId}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Batch upload failed');
+      const msg = err instanceof ApiError ? err.message : 'Batch upload failed';
+      setError(msg);
+      toast('error', msg);
     } finally {
       setSubmitting(false);
     }

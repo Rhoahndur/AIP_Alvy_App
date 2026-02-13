@@ -5,6 +5,7 @@ import Link from 'next/link';
 import PageHeader from '@/components/layout/page-header';
 import StatusBadge from '@/components/ui/status-badge';
 import MatchIndicator from '@/components/ui/match-indicator';
+import { api } from '@/lib/api/client';
 import { BEVERAGE_TYPE_LABELS } from '@/lib/constants';
 
 interface HistoryItem {
@@ -29,9 +30,7 @@ export default function HistoryPage() {
       const params = new URLSearchParams();
       if (filter !== 'all') params.set('status', filter);
       else params.set('status', 'VERIFIED,MANUALLY_REVIEWED');
-      const res = await fetch(`/api/applications?${params}`);
-      if (!res.ok) throw new Error('Failed to load');
-      const data = await res.json();
+      const data = await api.get<{ data: HistoryItem[] }>(`/api/applications?${params}`);
       setApplications(data.data);
     } catch {
       // silent fail for history
