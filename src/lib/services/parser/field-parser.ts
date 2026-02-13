@@ -71,23 +71,41 @@ function extractCountryOfOrigin(text: string): string | null {
 function extractNameAddress(text: string): string | null {
   const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
 
+  // Filter out lines that are part of the government warning
+  const govStart = lines.findIndex((l) => /GOVERNMENT\s*WARNING/i.test(l));
+  let govEnd = govStart;
+  if (govStart >= 0) {
+    // Government warning continues until a blank line or clearly different content
+    for (let j = govStart + 1; j < lines.length; j++) {
+      if (lines[j].length < 10) { govEnd = j - 1; break; }
+      if (/\b[A-Z]{2}\s+\d{5}\b/.test(lines[j]) && !/health\s+problems/i.test(lines[j])) {
+        govEnd = j - 1; break;
+      }
+      govEnd = j;
+    }
+  }
+
+  const isGovWarningLine = (i: number) => govStart >= 0 && i >= govStart && i <= govEnd;
+
   // Look for lines containing state abbreviation + ZIP code
   const addressPattern = /\b[A-Z]{2}\s+\d{5}\b/;
   for (let i = 0; i < lines.length; i++) {
+    if (isGovWarningLine(i)) continue;
     if (addressPattern.test(lines[i])) {
-      // Take this line and possibly the line before it
-      const start = Math.max(0, i - 1);
-      return lines.slice(start, i + 1).join(', ');
+      // Take this line and possibly the line before it (if not gov warning)
+      const prev = i - 1 >= 0 && !isGovWarningLine(i - 1) ? i - 1 : i;
+      return lines.slice(prev, i + 1).join(', ');
     }
   }
 
   // Fallback: look for known business suffixes
   const businessPatterns = [/Distiller[yies]+/i, /Winery/i, /Brewing\s*Co/i, /Bottled\s+by/i, /Produced\s+by/i];
   for (let i = 0; i < lines.length; i++) {
+    if (isGovWarningLine(i)) continue;
     for (const bp of businessPatterns) {
       if (bp.test(lines[i])) {
         const end = Math.min(lines.length, i + 3);
-        return lines.slice(i, end).join(', ');
+        return lines.slice(i, end).filter((_, idx) => !isGovWarningLine(i + idx)).join(', ');
       }
     }
   }

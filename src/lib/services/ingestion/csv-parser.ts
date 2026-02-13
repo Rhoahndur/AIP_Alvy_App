@@ -86,6 +86,8 @@ export class CSVIngestionProvider implements IngestionProvider {
 
       let hasErrors = false;
       for (const req of required) {
+        // Government warning is auto-populated if empty, so skip required check for it
+        if (req === 'governmentWarning') continue;
         const csvCol = fieldMap[req];
         if (csvCol && !row[csvCol]?.trim()) {
           errors.push({ row: rowNum, field: csvCol, message: `Required field "${csvCol}" is empty` });
