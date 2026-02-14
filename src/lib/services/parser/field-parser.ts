@@ -13,9 +13,12 @@ function normalizeText(text: string): string {
 function isArtifactLine(line: string): boolean {
   const stripped = line.trim();
   if (stripped.length === 0) return true;
-  // Repeated single character (e.g., "EEE", "III", "lll") — OCR artifact
-  const uniqueChars = new Set(stripped.replace(/\s/g, '').toLowerCase());
-  if (uniqueChars.size <= 2) return true;
+  // Repeated/low-diversity characters (e.g., "EEE", "RR RRRRRREEEE") — OCR artifact
+  const alphaOnly = stripped.replace(/[^a-zA-Z]/g, '').toLowerCase();
+  const uniqueAlpha = new Set(alphaOnly);
+  if (uniqueAlpha.size <= 2) return true;
+  // Long strings with very low character diversity relative to length — OCR noise
+  if (alphaOnly.length > 10 && uniqueAlpha.size < alphaOnly.length / 5) return true;
   // Keep lines that are a vintage year (e.g., "2021")
   if (/^(19|20)\d{2}$/.test(stripped)) return false;
   // Keep lines that look like measurements (net contents, ABV, etc.)

@@ -6,7 +6,16 @@ let workerPromise: Promise<Tesseract.Worker> | null = null;
 
 function getWorker(): Promise<Tesseract.Worker> {
   if (!workerPromise) {
-    workerPromise = Tesseract.createWorker('eng', Tesseract.OEM.LSTM_ONLY);
+    workerPromise = (async () => {
+      const worker = await Tesseract.createWorker('eng', Tesseract.OEM.LSTM_ONLY);
+      // PSM 11 = Sparse text: find as much text as possible in no particular order.
+      // Better than default PSM 3 (auto) for labels where text is scattered
+      // in different sizes/positions (brand names, years, ABV, etc.)
+      await worker.setParameters({
+        tessedit_pageseg_mode: Tesseract.PSM.SPARSE_TEXT,
+      });
+      return worker;
+    })();
   }
   return workerPromise;
 }
