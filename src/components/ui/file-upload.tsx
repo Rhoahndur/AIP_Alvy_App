@@ -120,7 +120,32 @@ export default function FileUpload({
         <p className="mt-2 text-sm text-red-600" role="alert">{error}</p>
       )}
 
-      {selectedFiles.length > 0 && (
+      {selectedFiles.length > 0 && !multiple && previews[0] && (
+        <div className="mt-3 bg-gray-50 rounded-lg p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <img
+                src={previews[0]}
+                alt={`Preview of ${selectedFiles[0].name}`}
+                className="max-h-[300px] w-auto rounded-lg border border-gray-200 object-contain"
+              />
+              <p className="text-sm text-gray-700 mt-2">{selectedFiles[0].name} ({(selectedFiles[0].size / 1024).toFixed(0)}KB)</p>
+            </div>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); removeFile(0); }}
+              className="text-gray-400 hover:text-red-500 min-w-[44px] min-h-[44px] flex items-center justify-center flex-shrink-0"
+              aria-label={`Remove ${selectedFiles[0].name}`}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {selectedFiles.length > 0 && (multiple || !previews[0]) && (
         <ul className="mt-3 space-y-2">
           {selectedFiles.map((file, i) => (
             <li key={`${file.name}-${i}`} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 text-sm">
