@@ -198,6 +198,10 @@ function extractBrandName(text: string, classType: string | null): string | null
     if (/\b[A-Z]{2}\s+\d{5}\b/.test(line)) return true; // address with ZIP
     if (/\d+\s+\w+\s+(Street|St|Road|Rd|Ave|Lane|Ln|Blvd|Dr|Way)\b/i.test(line)) return true; // street address
     if (/\b(Distiller[yies]*|Winery|Brewing\s*Co|Bottled\s+by|Produced\s+by)\b/i.test(line)) return true; // producer line
+    // Known appellations and varietals — not brand names
+    const normLine = normalizeText(line).toLowerCase();
+    if (KNOWN_APPELLATIONS.some((a) => normLine === a.toLowerCase())) return true;
+    if (KNOWN_VARIETALS.some((v) => normLine === v.toLowerCase())) return true;
     return false;
   };
 
