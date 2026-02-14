@@ -16,6 +16,8 @@ function isArtifactLine(line: string): boolean {
   // Repeated single character (e.g., "EEE", "III", "lll") — OCR artifact
   const uniqueChars = new Set(stripped.replace(/\s/g, '').toLowerCase());
   if (uniqueChars.size <= 2) return true;
+  // Keep lines that are a vintage year (e.g., "2021")
+  if (/^(19|20)\d{2}$/.test(stripped)) return false;
   // Keep lines that look like measurements (net contents, ABV, etc.)
   // Accept 0Z as OCR misread of OZ
   if (/\d+\.?\d*\s*(%|mL|ml|L|FL|[O0]Z|oz|Proof)/i.test(stripped)) return false;
