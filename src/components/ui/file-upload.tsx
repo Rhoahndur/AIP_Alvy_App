@@ -33,8 +33,11 @@ export default function FileUpload({
     const acceptedTypes = accept.split(',').map((t) => t.trim());
 
     for (const file of Array.from(files)) {
-      if (!acceptedTypes.includes(file.type)) {
-        setError(`"${file.name}" is not a supported format. Use JPEG or PNG.`);
+      const typeMatch = acceptedTypes.includes(file.type)
+        || acceptedTypes.some((t) => t.startsWith('.') && file.name.toLowerCase().endsWith(t));
+      if (!typeMatch) {
+        const formats = accept.includes('csv') ? 'CSV' : 'JPEG or PNG';
+        setError(`"${file.name}" is not a supported format. Use ${formats}.`);
         continue;
       }
       if (file.size > maxSizeBytes) {
@@ -105,7 +108,9 @@ export default function FileUpload({
         <p className="text-sm text-gray-600">
           <span className="font-medium text-indigo-600">Click to upload</span> or drag and drop
         </p>
-        <p className="text-xs text-gray-500 mt-1">JPEG or PNG only (max {(maxSizeBytes / 1024 / 1024).toFixed(1)}MB)</p>
+        <p className="text-xs text-gray-500 mt-1">
+          {accept.includes('csv') ? 'CSV files only' : `JPEG or PNG only (max ${(maxSizeBytes / 1024 / 1024).toFixed(1)}MB)`}
+        </p>
         <input
           ref={inputRef}
           type="file"
