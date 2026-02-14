@@ -1,14 +1,19 @@
 import sharp from 'sharp';
 import { OCR_IMAGE_WIDTH } from '@/lib/constants';
 
+/** White border padding (px) added around preprocessed images for OCR.
+ *  Prevents Tesseract segmentation errors when text is near image edges,
+ *  which fixes character-level misreads (e.g., "o" → "a") on small text. */
+const OCR_PADDING_PX = 20;
+
 /**
- * Standard preprocessing — upscale + sharpen + threshold.
+ * Standard preprocessing — resize + sharpen + normalize + pad.
  * Used for the primary OCR pass (PSM 3 structured reading).
  *
- * Key: upscaling to 3000px ensures small text (government warnings)
- * has sufficient pixel height (~30-40px) for reliable character recognition.
- * Thresholding creates clean binary image (pure black/white) which
- * eliminates "o→a" type confusions from partial fills.
+ * Key: upscaling to target width ensures small text (government warnings)
+ * has sufficient pixel height for reliable character recognition.
+ * White border padding prevents edge segmentation artifacts that cascade
+ * into character-level misreads on tightly-cropped label regions.
  */
 export async function preprocessImage(imageBuffer: Buffer): Promise<Buffer> {
   return sharp(imageBuffer)
@@ -20,6 +25,13 @@ export async function preprocessImage(imageBuffer: Buffer): Promise<Buffer> {
     .grayscale()
     .normalize()
     .sharpen({ sigma: 1.0 })
+    .extend({
+      top: OCR_PADDING_PX,
+      bottom: OCR_PADDING_PX,
+      left: OCR_PADDING_PX,
+      right: OCR_PADDING_PX,
+      background: { r: 255, g: 255, b: 255 },
+    })
     .png()
     .toBuffer();
 }
@@ -60,6 +72,13 @@ export async function preprocessImageEnhanced(imageBuffer: Buffer): Promise<Buff
     .negate()
     .normalize()
     .sharpen({ sigma: 1.0 })
+    .extend({
+      top: OCR_PADDING_PX,
+      bottom: OCR_PADDING_PX,
+      left: OCR_PADDING_PX,
+      right: OCR_PADDING_PX,
+      background: { r: 255, g: 255, b: 255 },
+    })
     .png()
     .toBuffer();
 }
