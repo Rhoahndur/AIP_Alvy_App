@@ -155,7 +155,7 @@ export default function SubmitPage() {
                           rows={3}
                           value={formData[field] || ''}
                           onChange={(e) => handleFieldChange(field, e.target.value)}
-                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                         />
                       ) : (
                         <input
@@ -163,7 +163,7 @@ export default function SubmitPage() {
                           type="text"
                           value={formData[field] || ''}
                           onChange={(e) => handleFieldChange(field, e.target.value)}
-                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                         />
                       )}
                     </div>
