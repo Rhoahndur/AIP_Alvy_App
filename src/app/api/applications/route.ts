@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/client';
 import { put } from '@vercel/blob';
-import { ACCEPTED_IMAGE_TYPES, MAX_IMAGE_SIZE_BYTES } from '@/lib/constants';
+import { ACCEPTED_IMAGE_TYPES, MAX_IMAGE_SIZE_BYTES, GOVERNMENT_WARNING_TEXT } from '@/lib/constants';
 
 // GET /api/applications — list applications with optional status filter
 export async function GET(request: NextRequest) {
@@ -83,11 +83,13 @@ export async function POST(request: NextRequest) {
     const classType = formData.get('classType') as string;
     const netContents = formData.get('netContents') as string;
     const nameAddress = formData.get('nameAddress') as string;
-    const governmentWarning = formData.get('governmentWarning') as string;
 
-    if (!brandName || !classType || !netContents || !nameAddress || !governmentWarning) {
-      return NextResponse.json({ error: 'Missing required fields: brandName, classType, netContents, nameAddress, governmentWarning' }, { status: 400 });
+    if (!brandName || !classType || !netContents || !nameAddress) {
+      return NextResponse.json({ error: 'Missing required fields: brandName, classType, netContents, nameAddress' }, { status: 400 });
     }
+
+    // Government warning is always the standard text — auto-populated
+    const governmentWarning = GOVERNMENT_WARNING_TEXT;
 
     // Upload image to blob storage
     const blob = await put(`labels/${Date.now()}-${image.name}`, image, {

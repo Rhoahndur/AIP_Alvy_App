@@ -259,10 +259,10 @@ export default function ApplicationDetailPage() {
                       <td className="px-4 py-3 text-sm font-medium text-gray-900">
                         {FIELD_LABELS[fr.fieldName] || fr.fieldName}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600 max-w-[200px] truncate" title={fr.expectedValue}>
+                      <td className="px-4 py-3 text-sm text-gray-600 max-w-[300px] break-words whitespace-normal">
                         {fr.expectedValue}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600 max-w-[200px] truncate" title={fr.extractedValue || 'Not found'}>
+                      <td className="px-4 py-3 text-sm text-gray-600 max-w-[300px] break-words whitespace-normal">
                         {fr.extractedValue || <span className="italic text-gray-400">Not found</span>}
                       </td>
                       <td className="px-4 py-3">

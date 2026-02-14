@@ -8,7 +8,7 @@ import FileUpload from '@/components/ui/file-upload';
 import BeverageTypeSelector from '@/components/forms/beverage-type-selector';
 import { useToast } from '@/components/ui/toast';
 import { api, ApiError } from '@/lib/api/client';
-import { FIELD_LABELS, UNIVERSAL_FIELDS, WINE_ONLY_FIELDS } from '@/lib/constants';
+import { FIELD_LABELS, UNIVERSAL_FIELDS, WINE_ONLY_FIELDS, GOVERNMENT_WARNING_TEXT } from '@/lib/constants';
 
 type SubmitMode = 'single' | 'batch';
 
@@ -27,9 +27,10 @@ export default function SubmitPage() {
     setFormData((prev) => ({ ...prev, [field]: value }));
   }, []);
 
-  const fieldsToShow = beverageType === 'WINE'
+  const fieldsToShow = (beverageType === 'WINE'
     ? [...UNIVERSAL_FIELDS, ...WINE_ONLY_FIELDS]
-    : UNIVERSAL_FIELDS;
+    : UNIVERSAL_FIELDS
+  ).filter((f) => f !== 'governmentWarning');
 
   const handleSingleSubmit = async () => {
     if (!beverageType || imageFiles.length === 0) {
@@ -145,11 +146,11 @@ export default function SubmitPage() {
                 <h3 className="text-sm font-medium text-gray-700 mb-4">Application Data</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {fieldsToShow.map((field) => (
-                    <div key={field} className={field === 'governmentWarning' || field === 'nameAddress' ? 'md:col-span-2' : ''}>
+                    <div key={field} className={field === 'nameAddress' ? 'md:col-span-2' : ''}>
                       <label htmlFor={field} className="block text-sm text-gray-600 mb-1">
                         {FIELD_LABELS[field]}
                       </label>
-                      {(field === 'governmentWarning' || field === 'nameAddress') ? (
+                      {field === 'nameAddress' ? (
                         <textarea
                           id={field}
                           rows={3}
@@ -169,6 +170,16 @@ export default function SubmitPage() {
                     </div>
                   ))}
                 </div>
+              </div>
+
+              <div className="bg-blue-50 rounded-lg border border-blue-200 p-4">
+                <h3 className="text-sm font-medium text-blue-800 mb-1">Government Warning</h3>
+                <p className="text-sm text-blue-700 mb-2">
+                  The standard government warning text is automatically included with every submission. You do not need to enter it — verification will still check that it appears on the label image.
+                </p>
+                <p className="text-xs text-blue-600 bg-blue-100 rounded p-2 leading-relaxed">
+                  {GOVERNMENT_WARNING_TEXT}
+                </p>
               </div>
 
               <div className="flex justify-end">
