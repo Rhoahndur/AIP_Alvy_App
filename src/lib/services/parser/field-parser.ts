@@ -18,7 +18,7 @@ function isArtifactLine(line: string): boolean {
   if (/^(19|20)\d{2}$/.test(stripped)) return false;
   // Keep lines that look like measurements (net contents, ABV, etc.)
   // Accept 0Z as OCR misread of OZ
-  if (/\d+\.?\d*\s*(%|mL|ml|L|FL|[O0]Z|oz|Proof)/i.test(stripped)) return false;
+  if (/\d+\.?\d*[\s\-]*(%|mL|ml|L|FL|[O0]Z|oz|Proof)/i.test(stripped)) return false;
   // Now apply artifact detection
   // Repeated/low-diversity characters (e.g., "EEE", "RR RRRRRREEEE") — OCR artifact
   const alphaOnly = stripped.replace(/[^a-zA-Z]/g, '').toLowerCase();
@@ -67,7 +67,7 @@ function extractAlcoholContent(text: string): string | null {
 }
 
 function extractNetContents(text: string): string | null {
-  // OCR commonly misreads O as 0 in "OZ", so accept both
+  // OCR commonly misreads O as 0 in "OZ"
   const pattern = /(\d+\.?\d*)\s*(mL|ml|L|l|FL\.?\s*[O0]Z\.?|fl\.?\s*[o0]z\.?)/i;
   const match = text.match(pattern);
   if (!match) return null;

@@ -1,6 +1,6 @@
 import Tesseract from 'tesseract.js';
 import type { OCRProvider, OCRResult, TextRegion } from '@/lib/types/ocr';
-import { preprocessImage } from './preprocessor';
+import { preprocessImage, preprocessImageEnhanced } from './preprocessor';
 
 let workerPromise: Promise<Tesseract.Worker> | null = null;
 
@@ -27,17 +27,19 @@ function extractWords(data: Tesseract.RecognizeResult['data']) {
 
 export class TesseractOCRProvider implements OCRProvider {
   async extractText(imageBuffer: Buffer): Promise<OCRResult> {
-    const preprocessed = await preprocessImage(imageBuffer);
     const worker = await getWorker();
 
-    // Pass 1: PSM 3 (auto) — good for structured text (paragraphs, addresses, warnings)
+    // Pass 1: Standard preprocessing + PSM 3 (auto)
+    // Gentle processing, preserves text fidelity — good for structured text
+    const standard = await preprocessImage(imageBuffer);
     await worker.setParameters({ tessedit_pageseg_mode: Tesseract.PSM.AUTO });
-    const primary = await worker.recognize(preprocessed);
+    const primary = await worker.recognize(standard);
 
-    // Pass 2: PSM 11 (sparse text) — catches isolated text PSM 3 misses
-    // (standalone years, large brand names, scattered label elements)
+    // Pass 2: Enhanced preprocessing + PSM 11 (sparse text)
+    // CLAHE + auto-invert — catches difficult text (white on dark, isolated elements)
+    const enhanced = await preprocessImageEnhanced(imageBuffer);
     await worker.setParameters({ tessedit_pageseg_mode: Tesseract.PSM.SPARSE_TEXT });
-    const sparse = await worker.recognize(preprocessed);
+    const sparse = await worker.recognize(enhanced);
 
     // Use primary text as the main output (preserves reading order),
     // append unique sparse-only lines as supplemental text
