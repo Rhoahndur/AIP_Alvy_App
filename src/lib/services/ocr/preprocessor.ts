@@ -20,9 +20,13 @@ export async function preprocessImage(imageBuffer: Buffer): Promise<Buffer> {
 }
 
 /**
- * Enhanced preprocessing — CLAHE + auto-invert for difficult text.
+ * Enhanced preprocessing — background subtraction for difficult text.
  * Used for the sparse OCR pass to catch text the primary pass misses
  * (e.g., white text on dark backgrounds, large isolated text).
+ *
+ * Technique: blur heavily to estimate the background, then subtract it.
+ * This evens out the background and makes text pop regardless of whether
+ * it's light-on-dark or dark-on-light.
  */
 export async function preprocessImageEnhanced(imageBuffer: Buffer): Promise<Buffer> {
   const grayscale = await sharp(imageBuffer)
@@ -32,22 +36,24 @@ export async function preprocessImageEnhanced(imageBuffer: Buffer): Promise<Buff
       fit: 'inside',
     })
     .grayscale()
+    .png()
     .toBuffer();
 
-  const enhanced = await sharp(grayscale)
-    .clahe({ width: 3, height: 3 })
+  // Heavy blur to estimate the background (text details disappear)
+  const background = await sharp(grayscale)
+    .blur(30)
+    .toBuffer();
+
+  // Subtract background from original using "difference" blend mode:
+  // |original - background| → text becomes bright, uniform bg becomes ~0
+  const subtracted = await sharp(background)
+    .composite([{ input: grayscale, blend: 'difference' }])
+    .toBuffer();
+
+  // Negate so text is dark on white background (what Tesseract prefers)
+  return sharp(subtracted)
+    .negate()
     .normalize()
-    .toBuffer();
-
-  // Auto-invert if image is predominantly dark (light text on dark bg)
-  const { channels } = await sharp(enhanced).stats();
-  const meanBrightness = channels[0].mean;
-
-  const final = meanBrightness < 128
-    ? await sharp(enhanced).negate().toBuffer()
-    : enhanced;
-
-  return sharp(final)
     .sharpen({ sigma: 1.0 })
     .png()
     .toBuffer();
