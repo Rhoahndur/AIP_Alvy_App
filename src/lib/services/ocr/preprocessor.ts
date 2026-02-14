@@ -14,12 +14,13 @@ export async function preprocessImage(imageBuffer: Buffer): Promise<Buffer> {
   return sharp(imageBuffer)
     .resize({
       width: OCR_IMAGE_WIDTH,
+      withoutEnlargement: true,
       fit: 'inside',
     })
     .grayscale()
+    .median(3)        // remove small noise dots that cause o→a confusion
     .normalize()
     .sharpen({ sigma: 1.0 })
-    .threshold(128)   // binary image — clean edges, no ambiguous gray pixels
     .png()
     .toBuffer();
 }
@@ -37,9 +38,11 @@ export async function preprocessImageEnhanced(imageBuffer: Buffer): Promise<Buff
   const grayscale = await sharp(imageBuffer)
     .resize({
       width: OCR_IMAGE_WIDTH,
+      withoutEnlargement: true,
       fit: 'inside',
     })
     .grayscale()
+    .median(3)
     .png()
     .toBuffer();
 
@@ -54,13 +57,11 @@ export async function preprocessImageEnhanced(imageBuffer: Buffer): Promise<Buff
     .composite([{ input: grayscale, blend: 'difference' }])
     .toBuffer();
 
-  // Negate so text is dark on white background (what Tesseract prefers),
-  // then threshold for clean binary output
+  // Negate so text is dark on white background (what Tesseract prefers)
   return sharp(subtracted)
     .negate()
     .normalize()
     .sharpen({ sigma: 1.0 })
-    .threshold(128)
     .png()
     .toBuffer();
 }
