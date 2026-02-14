@@ -1,7 +1,7 @@
 import type { OCRProvider } from '@/lib/types/ocr';
 import { TesseractOCRProvider } from './tesseract-provider';
 
-export { preprocessImage } from './preprocessor';
+export { preprocessImage, preprocessImageUnpadded } from './preprocessor';
 export { TesseractOCRProvider } from './tesseract-provider';
 
 const defaultProvider = new TesseractOCRProvider();

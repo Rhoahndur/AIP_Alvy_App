@@ -7,13 +7,9 @@ import { OCR_IMAGE_WIDTH } from '@/lib/constants';
 const OCR_PADDING_PX = 20;
 
 /**
- * Standard preprocessing — resize + sharpen + normalize + pad.
- * Used for the primary OCR pass (PSM 3 structured reading).
- *
- * Key: upscaling to target width ensures small text (government warnings)
- * has sufficient pixel height for reliable character recognition.
- * White border padding prevents edge segmentation artifacts that cascade
- * into character-level misreads on tightly-cropped label regions.
+ * Standard preprocessing WITH padding — resize + sharpen + normalize + pad.
+ * Used for the primary OCR pass. Padding fixes character-level misreads
+ * but may cause Tesseract to skip faint/small text near edges.
  */
 export async function preprocessImage(imageBuffer: Buffer): Promise<Buffer> {
   return sharp(imageBuffer)
@@ -37,48 +33,20 @@ export async function preprocessImage(imageBuffer: Buffer): Promise<Buffer> {
 }
 
 /**
- * Enhanced preprocessing — background subtraction for difficult text.
- * Used for the sparse OCR pass to catch text the primary pass misses
- * (e.g., white text on dark backgrounds, large isolated text).
- *
- * Technique: blur heavily to estimate the background, then subtract it.
- * This evens out the background and makes text pop regardless of whether
- * it's light-on-dark or dark-on-light.
+ * Standard preprocessing WITHOUT padding — resize + sharpen + normalize.
+ * Used as a recovery pass to catch faint text (e.g., light address lines
+ * on dark backgrounds) that the padded pass drops due to segmentation changes.
  */
-export async function preprocessImageEnhanced(imageBuffer: Buffer): Promise<Buffer> {
-  const grayscale = await sharp(imageBuffer)
+export async function preprocessImageUnpadded(imageBuffer: Buffer): Promise<Buffer> {
+  return sharp(imageBuffer)
     .resize({
       width: OCR_IMAGE_WIDTH,
       withoutEnlargement: true,
       fit: 'inside',
     })
     .grayscale()
-    .png()
-    .toBuffer();
-
-  // Heavy blur to estimate the background (text details disappear)
-  const background = await sharp(grayscale)
-    .blur(30)
-    .toBuffer();
-
-  // Subtract background from original using "difference" blend mode:
-  // |original - background| → text becomes bright, uniform bg becomes ~0
-  const subtracted = await sharp(background)
-    .composite([{ input: grayscale, blend: 'difference' }])
-    .toBuffer();
-
-  // Negate so text is dark on white background (what Tesseract prefers)
-  return sharp(subtracted)
-    .negate()
     .normalize()
     .sharpen({ sigma: 1.0 })
-    .extend({
-      top: OCR_PADDING_PX,
-      bottom: OCR_PADDING_PX,
-      left: OCR_PADDING_PX,
-      right: OCR_PADDING_PX,
-      background: { r: 255, g: 255, b: 255 },
-    })
     .png()
     .toBuffer();
 }

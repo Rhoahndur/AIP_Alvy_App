@@ -1,6 +1,6 @@
 import Tesseract from 'tesseract.js';
 import type { OCRProvider, OCRResult, TextRegion } from '@/lib/types/ocr';
-import { preprocessImage, preprocessImageEnhanced } from './preprocessor';
+import { preprocessImage, preprocessImageUnpadded } from './preprocessor';
 
 let workerPromise: Promise<Tesseract.Worker> | null = null;
 
@@ -29,30 +29,32 @@ export class TesseractOCRProvider implements OCRProvider {
   async extractText(imageBuffer: Buffer): Promise<OCRResult> {
     const worker = await getWorker();
 
-    // Pass 1: Standard preprocessing + PSM 3 (auto)
-    // Gentle processing, preserves text fidelity — good for structured text
-    const standard = await preprocessImage(imageBuffer);
+    // Pass 1: Standard preprocessing WITH padding + PSM AUTO
+    // Padding fixes character-level misreads near edges ("o"→"a") but may
+    // cause Tesseract to skip faint/small text that touches the border.
+    const padded = await preprocessImage(imageBuffer);
     await worker.setParameters({ tessedit_pageseg_mode: Tesseract.PSM.AUTO });
-    const primary = await worker.recognize(standard);
+    const primary = await worker.recognize(padded);
 
-    // Pass 2: Enhanced preprocessing + PSM 11 (sparse text)
-    // CLAHE + auto-invert — catches difficult text (white on dark, isolated elements)
-    const enhanced = await preprocessImageEnhanced(imageBuffer);
-    await worker.setParameters({ tessedit_pageseg_mode: Tesseract.PSM.SPARSE_TEXT });
-    const sparse = await worker.recognize(enhanced);
+    // Pass 2: Standard preprocessing WITHOUT padding + PSM AUTO
+    // Recovers faint text (e.g., light address lines on dark backgrounds)
+    // that the padded pass drops due to segmentation changes.
+    const unpadded = await preprocessImageUnpadded(imageBuffer);
+    await worker.setParameters({ tessedit_pageseg_mode: Tesseract.PSM.AUTO });
+    const recovery = await worker.recognize(unpadded);
 
-    // Use primary text as the main output (preserves reading order),
-    // append unique sparse-only lines as supplemental text
+    // Merge: padded pass is primary (better character accuracy),
+    // append unique lines from recovery pass as supplemental text
     const primaryLines = new Set(
       primary.data.text.split('\n').map((l) => l.trim().toLowerCase()).filter(Boolean)
     );
-    const sparseOnlyLines = sparse.data.text
+    const recoveryOnlyLines = recovery.data.text
       .split('\n')
       .map((l) => l.trim())
       .filter((l) => l && !primaryLines.has(l.toLowerCase()));
 
-    const mergedText = sparseOnlyLines.length > 0
-      ? primary.data.text.trimEnd() + '\n' + sparseOnlyLines.join('\n')
+    const mergedText = recoveryOnlyLines.length > 0
+      ? primary.data.text.trimEnd() + '\n' + recoveryOnlyLines.join('\n')
       : primary.data.text;
 
     const words = extractWords(primary.data);
