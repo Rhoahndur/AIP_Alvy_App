@@ -21,7 +21,10 @@ export default function FileUpload({
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<Record<number, string>>({});
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const isImageFile = (file: File) => file.type.startsWith('image/');
 
   const validateAndSet = useCallback((files: FileList | null) => {
     if (!files) return;
@@ -45,13 +48,40 @@ export default function FileUpload({
       const updated = multiple ? [...selectedFiles, ...valid] : valid;
       setSelectedFiles(updated);
       onFilesSelected(updated);
+
+      // Generate preview URLs for image files
+      if (!multiple) {
+        // Single mode: revoke old previews
+        Object.values(previews).forEach(URL.revokeObjectURL);
+        const newPreviews: Record<number, string> = {};
+        valid.forEach((file, i) => {
+          if (isImageFile(file)) newPreviews[i] = URL.createObjectURL(file);
+        });
+        setPreviews(newPreviews);
+      } else {
+        const offset = selectedFiles.length;
+        const newPreviews = { ...previews };
+        valid.forEach((file, i) => {
+          if (isImageFile(file)) newPreviews[offset + i] = URL.createObjectURL(file);
+        });
+        setPreviews(newPreviews);
+      }
     }
-  }, [accept, maxSizeBytes, multiple, onFilesSelected, selectedFiles]);
+  }, [accept, maxSizeBytes, multiple, onFilesSelected, selectedFiles, previews]);
 
   const removeFile = (index: number) => {
+    if (previews[index]) URL.revokeObjectURL(previews[index]);
     const updated = selectedFiles.filter((_, i) => i !== index);
     setSelectedFiles(updated);
     onFilesSelected(updated);
+    // Re-index previews
+    const newPreviews: Record<number, string> = {};
+    Object.entries(previews).forEach(([k, v]) => {
+      const ki = Number(k);
+      if (ki < index) newPreviews[ki] = v;
+      else if (ki > index) newPreviews[ki - 1] = v;
+    });
+    setPreviews(newPreviews);
   };
 
   return (
@@ -94,7 +124,16 @@ export default function FileUpload({
         <ul className="mt-3 space-y-2">
           {selectedFiles.map((file, i) => (
             <li key={`${file.name}-${i}`} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 text-sm">
-              <span className="text-gray-700 truncate">{file.name} ({(file.size / 1024).toFixed(0)}KB)</span>
+              <div className="flex items-center gap-3 min-w-0">
+                {previews[i] && (
+                  <img
+                    src={previews[i]}
+                    alt={`Preview of ${file.name}`}
+                    className="h-12 w-12 object-cover rounded border border-gray-200 flex-shrink-0"
+                  />
+                )}
+                <span className="text-gray-700 truncate">{file.name} ({(file.size / 1024).toFixed(0)}KB)</span>
+              </div>
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); removeFile(i); }}
