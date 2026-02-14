@@ -133,10 +133,11 @@ function extractNameAddress(text: string): string | null {
   const govStart = lines.findIndex((l) => /GOVERNMENT\s*WARNING/i.test(l));
   let govEnd = govStart;
   if (govStart >= 0) {
-    // Government warning continues until a blank line or clearly different content
+    // Government warning continues until "health problems." (always the last line)
     for (let j = govStart + 1; j < lines.length; j++) {
+      if (/health\s+problems/i.test(lines[j])) { govEnd = j; break; }
       if (lines[j].length < 10) { govEnd = j - 1; break; }
-      if (/\b[A-Z]{2}\s+\d{5}\b/.test(lines[j]) && !/health\s+problems/i.test(lines[j])) {
+      if (/\b[A-Z]{2}\s+\d{5}\b/.test(lines[j])) {
         govEnd = j - 1; break;
       }
       govEnd = j;
