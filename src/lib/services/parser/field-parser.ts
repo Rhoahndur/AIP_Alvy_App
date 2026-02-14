@@ -20,9 +20,21 @@ function findBestMatch(text: string, candidates: string[]): string | null {
 }
 
 function extractAlcoholContent(text: string): string | null {
-  const pattern = /(\d+\.?\d*)\s*%\s*Alc\.?\s*[\/\\]?\s*Vol\.?(\s*\(\d+\s*Proof\))?/i;
-  const match = text.match(pattern);
-  return match ? match[0].trim() : null;
+  // Try multiple common ABV formats
+  const patterns = [
+    /(\d+\.?\d*)\s*%\s*Alc[.,]?\s*[\/\\]?\s*Vol[.,]?(\s*\(\d+\s*Proof\))?/i,
+    /(\d+\.?\d*)\s*%\s*ABV/i,
+    /Alc\.?\s*(\d+\.?\d*)\s*%\s*(?:by\s+)?Vol(?:ume)?\.?/i,
+    /Alcohol\s*(\d+\.?\d*)\s*%\s*(?:by\s+)?Vol(?:ume)?\.?/i,
+    /(\d+\.?\d*)\s*%\s*Alcohol/i,
+    /ABV\s*(\d+\.?\d*)\s*%/i,
+    /(\d+\.?\d*)\s*(?:Proof)/i,
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match) return match[0].trim();
+  }
+  return null;
 }
 
 function extractNetContents(text: string): string | null {
