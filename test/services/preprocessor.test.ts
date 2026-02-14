@@ -26,14 +26,16 @@ describe('preprocessImage', () => {
     const input = await createTestImage(500, 400);
     const output = await preprocessImage(input);
     const meta = await sharp(output).metadata();
-    expect(meta.width).toBeLessThanOrEqual(500);
+    // 500px content + 40px padding (20 each side) = 540px
+    expect(meta.width).toBeLessThanOrEqual(540);
   });
 
-  it('resizes images larger than max width to 1500px', async () => {
+  it('resizes images larger than max width to 1500px (plus padding)', async () => {
     const input = await createTestImage(3000, 2000);
     const output = await preprocessImage(input);
     const meta = await sharp(output).metadata();
-    expect(meta.width).toBeLessThanOrEqual(1500);
+    // 1500px content + 40px padding (20 each side) = 1540px
+    expect(meta.width).toBeLessThanOrEqual(1540);
   });
 
   it('converts to grayscale', async () => {
@@ -52,13 +54,16 @@ describe('preprocessImage', () => {
     expect(meta.format).toBe('png');
   });
 
-  it('maintains aspect ratio', async () => {
+  it('maintains aspect ratio (before padding)', async () => {
     const input = await createTestImage(3000, 1500);
     const output = await preprocessImage(input);
     const meta = await sharp(output).metadata();
-    // 3000:1500 = 2:1, so at 1500 width, height should be ~750
+    // 3000:1500 = 2:1, resized to 1500x750, then +40px padding each axis → 1540x790
+    // Content ratio preserved; overall ratio shifts slightly due to uniform padding
     if (meta.width && meta.height) {
-      const ratio = meta.width / meta.height;
+      const contentWidth = meta.width - 40;  // subtract padding
+      const contentHeight = meta.height - 40;
+      const ratio = contentWidth / contentHeight;
       expect(ratio).toBeCloseTo(2.0, 0);
     }
   });
