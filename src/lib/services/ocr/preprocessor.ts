@@ -18,7 +18,6 @@ export async function preprocessImage(imageBuffer: Buffer): Promise<Buffer> {
       fit: 'inside',
     })
     .grayscale()
-    .median(3)        // remove small noise dots that cause o→a confusion
     .normalize()
     .sharpen({ sigma: 1.0 })
     .png()
@@ -42,7 +41,6 @@ export async function preprocessImageEnhanced(imageBuffer: Buffer): Promise<Buff
       fit: 'inside',
     })
     .grayscale()
-    .median(3)
     .png()
     .toBuffer();
 
