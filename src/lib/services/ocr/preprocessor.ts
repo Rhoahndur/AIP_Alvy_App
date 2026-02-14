@@ -9,8 +9,8 @@ export async function preprocessImage(imageBuffer: Buffer): Promise<Buffer> {
       fit: 'inside',
     })
     .grayscale()
-    .linear(1.5, -(128 * 1.5 - 128))
-    .sharpen()
+    .normalize()    // auto-stretch histogram for full contrast range
+    .sharpen({ sigma: 1.0 })  // gentle sharpen (default is too aggressive)
     .png()
     .toBuffer();
 }

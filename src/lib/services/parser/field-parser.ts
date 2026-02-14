@@ -13,6 +13,8 @@ function normalizeText(text: string): string {
 function isArtifactLine(line: string): boolean {
   const stripped = line.trim();
   if (stripped.length === 0) return true;
+  // Keep lines that look like measurements (net contents, ABV, etc.)
+  if (/\d+\.?\d*\s*(%|mL|ml|L|FL|OZ|oz|Proof)/i.test(stripped)) return false;
   // Count alphabetic characters that form real words (3+ alpha chars in a row)
   const realWords = stripped.match(/[a-zA-Z]{3,}/g);
   if (!realWords) return true; // no real words at all
@@ -164,27 +166,46 @@ function extractVintageDate(text: string): string | null {
 function extractBrandName(text: string, classType: string | null): string | null {
   const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
 
-  // Brand name is typically the first significant line of text
-  // Skip lines that are recognized as other fields or OCR artifacts
+  // Helper: check if a line is a known non-brand field
+  const isKnownField = (line: string): boolean => {
+    if (/^\d+\.?\d*\s*%/i.test(line)) return true; // ABV
+    if (/^\d+\s*(mL|L|FL)/i.test(line)) return true; // Net contents
+    if (/GOVERNMENT\s*WARNING/i.test(line)) return true;
+    if (/Product\s+of/i.test(line)) return true;
+    if (/Imported/i.test(line)) return true;
+    if (/\b[A-Z]{2}\s+\d{5}\b/.test(line)) return true; // address with ZIP
+    if (/\d+\s+\w+\s+(Street|St|Road|Rd|Ave|Lane|Ln|Blvd|Dr|Way)\b/i.test(line)) return true; // street address
+    if (/\b(Distiller[yies]*|Winery|Brewing\s*Co|Bottled\s+by|Produced\s+by)\b/i.test(line)) return true; // producer line
+    return false;
+  };
+
+  // Pass 1: Brand name is typically the first significant line of text
   for (const line of lines) {
     if (line.length < 2) continue;
     if (isArtifactLine(line)) continue;
-    if (/^\d+\.?\d*\s*%/i.test(line)) continue; // ABV
-    if (/^\d+\s*(mL|L|FL)/i.test(line)) continue; // Net contents
-    if (/GOVERNMENT\s*WARNING/i.test(line)) continue;
-    if (/Product\s+of/i.test(line)) continue;
-    if (/Imported/i.test(line)) continue;
+    if (/^[—\-–|_'"]/.test(line)) continue; // starts with dash/punctuation
+    if (isKnownField(line)) continue;
 
     // If classType was found, skip lines that are the class/type
     if (classType && line.toLowerCase().includes(classType.toLowerCase())) {
-      // If the line IS the class/type and nothing else, skip it
       if (normalizeText(line).toLowerCase() === classType.toLowerCase()) continue;
-      // If brand name is on the same line as class/type, extract just the brand part
       const ctIdx = line.toLowerCase().indexOf(classType.toLowerCase());
       if (ctIdx > 0) return normalizeText(line.substring(0, ctIdx));
     }
 
     return normalizeText(line);
+  }
+
+  // Pass 2: If first-line heuristic failed, look for a capitalized multi-word
+  // phrase that isn't a known field (brand names are often in ALL CAPS)
+  for (const line of lines) {
+    if (isArtifactLine(line)) continue;
+    if (isKnownField(line)) continue;
+    const normalized = normalizeText(line);
+    // Look for lines that are mostly uppercase words (typical brand name styling)
+    if (/^[A-Z][A-Z'\s]{4,}$/.test(normalized)) {
+      return normalized;
+    }
   }
 
   return null;
