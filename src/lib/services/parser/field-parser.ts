@@ -5,6 +5,22 @@ function normalizeText(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
 }
 
+/**
+ * Returns true if a line looks like an OCR artifact rather than real label text.
+ * Artifact lines are things like "EE ———", "——", "|||", etc. that come from
+ * decorative elements on labels being misread by the OCR engine.
+ */
+function isArtifactLine(line: string): boolean {
+  const stripped = line.trim();
+  if (stripped.length === 0) return true;
+  // Count alphabetic characters that form real words (3+ alpha chars in a row)
+  const realWords = stripped.match(/[a-zA-Z]{3,}/g);
+  if (!realWords) return true; // no real words at all
+  // If the line is mostly non-alpha noise (dashes, pipes, etc.), treat as artifact
+  const alphaCount = (stripped.match(/[a-zA-Z]/g) || []).length;
+  return alphaCount / stripped.length < 0.4;
+}
+
 function findBestMatch(text: string, candidates: string[]): string | null {
   const normalized = text.toLowerCase();
   // Sort by length descending so longer (more specific) matches win
@@ -64,7 +80,21 @@ function extractGovernmentWarning(text: string): string | null {
     }
   }
 
-  return normalizeText(remaining.substring(0, endIdx));
+  let extracted = normalizeText(remaining.substring(0, endIdx));
+
+  // The warning always ends with "...may cause health problems."
+  // Trim any trailing OCR artifacts (e.g. "EEE", "———") that got captured
+  const healthProblemsIdx = extracted.search(/health\s+problems\.?/i);
+  if (healthProblemsIdx >= 0) {
+    const match = extracted.match(/health\s+problems\.?/i);
+    if (match) {
+      extracted = extracted.substring(0, healthProblemsIdx + match[0].length);
+      // Ensure it ends with a period
+      if (!extracted.endsWith('.')) extracted += '.';
+    }
+  }
+
+  return extracted;
 }
 
 function extractCountryOfOrigin(text: string): string | null {
@@ -135,9 +165,10 @@ function extractBrandName(text: string, classType: string | null): string | null
   const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
 
   // Brand name is typically the first significant line of text
-  // Skip lines that are recognized as other fields
+  // Skip lines that are recognized as other fields or OCR artifacts
   for (const line of lines) {
     if (line.length < 2) continue;
+    if (isArtifactLine(line)) continue;
     if (/^\d+\.?\d*\s*%/i.test(line)) continue; // ABV
     if (/^\d+\s*(mL|L|FL)/i.test(line)) continue; // Net contents
     if (/GOVERNMENT\s*WARNING/i.test(line)) continue;
@@ -160,17 +191,22 @@ function extractBrandName(text: string, classType: string | null): string | null
 }
 
 export function parseFieldsFromText(rawText: string): ParsedLabelFields {
-  const text = normalizeText(rawText);
+  // Pre-filter: remove artifact lines from the raw text before parsing
+  const cleanedRaw = rawText
+    .split('\n')
+    .filter((line) => !isArtifactLine(line))
+    .join('\n');
+  const text = normalizeText(cleanedRaw);
 
-  const classType = findBestMatch(rawText, KNOWN_CLASS_TYPES);
-  const brandName = extractBrandName(rawText, classType);
+  const classType = findBestMatch(cleanedRaw, KNOWN_CLASS_TYPES);
+  const brandName = extractBrandName(cleanedRaw, classType);
   const alcoholContent = extractAlcoholContent(text);
   const netContents = extractNetContents(text);
-  const governmentWarning = extractGovernmentWarning(rawText);
+  const governmentWarning = extractGovernmentWarning(cleanedRaw);
   const countryOfOrigin = extractCountryOfOrigin(text);
-  const nameAddress = extractNameAddress(rawText);
-  const appellation = findBestMatch(rawText, KNOWN_APPELLATIONS);
-  const varietal = findBestMatch(rawText, KNOWN_VARIETALS);
+  const nameAddress = extractNameAddress(cleanedRaw);
+  const appellation = findBestMatch(cleanedRaw, KNOWN_APPELLATIONS);
+  const varietal = findBestMatch(cleanedRaw, KNOWN_VARIETALS);
   const vintageDate = extractVintageDate(text);
 
   return {
