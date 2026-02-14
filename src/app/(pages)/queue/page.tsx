@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import PageHeader from '@/components/layout/page-header';
 import Button from '@/components/ui/button';
@@ -35,6 +35,8 @@ export default function QueuePage() {
   const [verifying, setVerifying] = useState(false);
   const [verifyProgress, setVerifyProgress] = useState<{ current: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sortField, setSortField] = useState<'brandName' | 'createdAt'>('createdAt');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   const fetchQueue = useCallback(async () => {
     try {
@@ -50,6 +52,28 @@ export default function QueuePage() {
   useEffect(() => {
     fetchQueue();
   }, [fetchQueue]);
+
+  const sortedApplications = useMemo(() => {
+    const sorted = [...applications];
+    sorted.sort((a, b) => {
+      if (sortField === 'brandName') {
+        const cmp = a.brandName.localeCompare(b.brandName, undefined, { sensitivity: 'base' });
+        return sortDir === 'asc' ? cmp : -cmp;
+      }
+      const cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+    return sorted;
+  }, [applications, sortField, sortDir]);
+
+  const handleSort = (field: 'brandName' | 'createdAt') => {
+    if (sortField === field) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDir(field === 'brandName' ? 'asc' : 'desc');
+    }
+  };
 
   const handleVerifySingle = async (appId: string) => {
     try {
@@ -166,16 +190,24 @@ export default function QueuePage() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Brand</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleSort('brandName')} className="inline-flex items-center gap-1 hover:text-gray-700">
+                    Brand {sortField === 'brandName' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                  </button>
+                </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Class</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Submitted</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleSort('createdAt')} className="inline-flex items-center gap-1 hover:text-gray-700">
+                    Submitted {sortField === 'createdAt' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+                  </button>
+                </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {applications.map((app) => (
+              {sortedApplications.map((app) => (
                 <tr key={app.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 text-sm font-medium text-gray-900">{app.brandName}</td>
                   <td className="px-6 py-4 text-sm text-gray-600">{BEVERAGE_TYPE_LABELS[app.beverageType] || app.beverageType}</td>

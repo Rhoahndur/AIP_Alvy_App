@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import PageHeader from '@/components/layout/page-header';
 import Button from '@/components/ui/button';
@@ -22,6 +22,66 @@ export default function SubmitPage() {
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pairingPreview, setPairingPreview] = useState<{
+    matched: { csvFilename: string; imageFile: string }[];
+    unmatchedRecords: string[];
+    unmatchedImages: string[];
+  } | null>(null);
+
+  useEffect(() => {
+    if (mode !== 'batch' || csvFile.length === 0 || imageFiles.length === 0) {
+      setPairingPreview(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    csvFile[0].text().then((text) => {
+      if (cancelled) return;
+
+      const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+      if (lines.length < 2) {
+        setPairingPreview(null);
+        return;
+      }
+
+      const headers = lines[0].split(',').map((h) => h.trim().toLowerCase());
+      const filenameIdx = headers.indexOf('image_filename');
+      if (filenameIdx === -1) {
+        setPairingPreview(null);
+        return;
+      }
+
+      const csvFilenames: string[] = [];
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(',');
+        const fname = cols[filenameIdx]?.trim();
+        if (fname) csvFilenames.push(fname);
+      }
+
+      const imageNames = imageFiles.map((f) => f.name);
+      const imageNamesLower = new Map(imageNames.map((n) => [n.toLowerCase(), n]));
+
+      const matched: { csvFilename: string; imageFile: string }[] = [];
+      const unmatchedRecords: string[] = [];
+
+      for (const csvFn of csvFilenames) {
+        const found = imageNamesLower.get(csvFn.toLowerCase());
+        if (found) {
+          matched.push({ csvFilename: csvFn, imageFile: found });
+        } else {
+          unmatchedRecords.push(csvFn);
+        }
+      }
+
+      const matchedImageLower = new Set(matched.map((m) => m.imageFile.toLowerCase()));
+      const unmatchedImages = imageNames.filter((n) => !matchedImageLower.has(n.toLowerCase()));
+
+      setPairingPreview({ matched, unmatchedRecords, unmatchedImages });
+    });
+
+    return () => { cancelled = true; };
+  }, [mode, csvFile, imageFiles]);
 
   const handleFieldChange = useCallback((field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -213,9 +273,58 @@ export default function SubmitPage() {
             label="Label Images"
           />
 
+          {pairingPreview && (
+            <div className="bg-white rounded-lg border border-gray-200 p-6">
+              <h3 className="text-sm font-medium text-gray-700 mb-3">Pairing Preview</h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-2 pr-4 text-gray-500 font-medium">Status</th>
+                      <th className="text-left py-2 pr-4 text-gray-500 font-medium">CSV Filename</th>
+                      <th className="text-left py-2 text-gray-500 font-medium">Image File</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pairingPreview.matched.map((m) => (
+                      <tr key={m.csvFilename} className="border-b border-gray-100 bg-green-50">
+                        <td className="py-2 pr-4 text-green-700 font-medium">Matched</td>
+                        <td className="py-2 pr-4 text-gray-900">{m.csvFilename}</td>
+                        <td className="py-2 text-gray-900">{m.imageFile}</td>
+                      </tr>
+                    ))}
+                    {pairingPreview.unmatchedRecords.map((r) => (
+                      <tr key={r} className="border-b border-gray-100 bg-red-50">
+                        <td className="py-2 pr-4 text-red-700 font-medium">No Image</td>
+                        <td className="py-2 pr-4 text-gray-900">{r}</td>
+                        <td className="py-2 text-gray-400">—</td>
+                      </tr>
+                    ))}
+                    {pairingPreview.unmatchedImages.map((img) => (
+                      <tr key={img} className="border-b border-gray-100 bg-yellow-50">
+                        <td className="py-2 pr-4 text-yellow-700 font-medium">No CSV Row</td>
+                        <td className="py-2 pr-4 text-gray-400">—</td>
+                        <td className="py-2 text-gray-900">{img}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {pairingPreview.matched.length === 0 && (
+                <p className="mt-3 text-sm text-red-600">No matched pairs found. Check that CSV <code className="bg-gray-100 px-1 rounded">image_filename</code> values match your uploaded image filenames.</p>
+              )}
+            </div>
+          )}
+
           <div className="flex justify-end">
-            <Button onClick={handleBatchSubmit} loading={submitting}>
-              Upload Batch
+            <Button
+              onClick={handleBatchSubmit}
+              loading={submitting}
+              disabled={pairingPreview !== null && pairingPreview.matched.length === 0}
+            >
+              {pairingPreview && pairingPreview.matched.length > 0
+                ? `Submit ${pairingPreview.matched.length} Application${pairingPreview.matched.length !== 1 ? 's' : ''}`
+                : 'Upload Batch'}
             </Button>
           </div>
         </div>
