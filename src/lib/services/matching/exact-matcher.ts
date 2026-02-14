@@ -58,29 +58,6 @@ export function exactMatch(
   const maxLen = Math.max(normalizedExpected.length, normalizedExtracted.length);
   const similarity = maxLen > 0 ? 1 - dist / maxLen : 0;
 
-  // For long standardized text like government warnings, minor OCR errors
-  // (e.g., "not" → "nat") shouldn't cause a failure. Allow near-perfect matches.
-  if (similarity >= 0.98 && isAllCaps) {
-    return {
-      fieldName,
-      expected,
-      extracted,
-      result: 'MATCH',
-      confidence: similarity,
-    };
-  }
-
-  if (similarity >= 0.90 && isAllCaps) {
-    return {
-      fieldName,
-      expected,
-      extracted,
-      result: 'PARTIAL',
-      confidence: similarity,
-      details: 'Minor OCR differences detected',
-    };
-  }
-
   const details: string[] = [];
   if (!isAllCaps) details.push('"GOVERNMENT WARNING" is not in all caps');
   if (similarity < 1) details.push('Warning text does not match exactly');
