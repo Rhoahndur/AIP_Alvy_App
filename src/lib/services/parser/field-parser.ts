@@ -13,6 +13,9 @@ function normalizeText(text: string): string {
 function isArtifactLine(line: string): boolean {
   const stripped = line.trim();
   if (stripped.length === 0) return true;
+  // Repeated single character (e.g., "EEE", "III", "lll") — OCR artifact
+  const uniqueChars = new Set(stripped.replace(/\s/g, '').toLowerCase());
+  if (uniqueChars.size <= 2) return true;
   // Keep lines that look like measurements (net contents, ABV, etc.)
   // Accept 0Z as OCR misread of OZ
   if (/\d+\.?\d*\s*(%|mL|ml|L|FL|[O0]Z|oz|Proof)/i.test(stripped)) return false;
