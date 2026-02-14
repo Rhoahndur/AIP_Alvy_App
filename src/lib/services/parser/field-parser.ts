@@ -25,7 +25,8 @@ function isArtifactLine(line: string): boolean {
   const uniqueAlpha = new Set(alphaOnly);
   if (uniqueAlpha.size <= 2) return true;
   // Long strings with very low character diversity relative to length — OCR noise
-  if (alphaOnly.length > 10 && uniqueAlpha.size < alphaOnly.length / 5) return true;
+  // Cap at 10 unique chars: real English text always exceeds this; OCR artifacts don't
+  if (alphaOnly.length > 10 && uniqueAlpha.size < alphaOnly.length / 5 && uniqueAlpha.size < 10) return true;
   // Count alphabetic characters that form real words (3+ alpha chars in a row)
   const realWords = stripped.match(/[a-zA-Z]{3,}/g);
   if (!realWords) return true; // no real words at all
@@ -224,7 +225,8 @@ function extractBrandName(text: string, classType: string | null): string | null
     if (/Imported/i.test(line)) return true;
     if (/\b[A-Z]{2}\s+\d{5}\b/.test(line)) return true; // address with ZIP
     if (/\d+\s+\w+\s+(Street|St|Road|Rd|Ave|Lane|Ln|Blvd|Dr|Way)\b/i.test(line)) return true; // street address
-    if (/\b(Distiller[yies]*|Winery|Brewing\s*Co|Bottled\s+by|Produced\s+by)\b/i.test(line)) return true; // producer line
+    if (/\b(Bottled\s+by|Produced\s+by)\b/i.test(line)) return true; // attribution prefix
+    if (/\b(Distiller[yies]*|Winery|Brewing\s*Co)\b/i.test(line) && /,/.test(line)) return true; // producer + address
     // Known appellations and varietals — not brand names
     const normLine = normalizeText(line).toLowerCase();
     if (KNOWN_APPELLATIONS.some((a) => normLine === a.toLowerCase())) return true;
