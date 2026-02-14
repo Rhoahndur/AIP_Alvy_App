@@ -148,17 +148,37 @@ function extractNameAddress(text: string): string | null {
 
   // Look for lines containing state abbreviation + ZIP code
   const addressPattern = /\b[A-Z]{2}\s+\d{5}\b/;
+  const businessPatterns = [/Distiller[yies]+/i, /Winery/i, /Brewing\s*Co/i, /Bottled\s+by/i, /Produced\s+by/i];
+
   for (let i = 0; i < lines.length; i++) {
     if (isGovWarningLine(i)) continue;
     if (addressPattern.test(lines[i])) {
-      // Take this line and possibly the line before it (if not gov warning)
-      const prev = i - 1 >= 0 && !isGovWarningLine(i - 1) ? i - 1 : i;
+      // Scan backward to find the company/producer name line.
+      // May be separated from the ZIP line by the gov warning block (due to
+      // OCR pass merging), so skip gov warning and empty lines.
+      let companyIdx = -1;
+      for (let k = i - 1; k >= 0; k--) {
+        if (isGovWarningLine(k)) continue;
+        const l = lines[k].trim();
+        if (l.length === 0) continue;
+        // Stop scanning if we reach something clearly not part of an address
+        if (/^\d+\.?\d*\s*%/i.test(l)) break; // ABV
+        if (/^\d+\s*(mL|L|FL)/i.test(l)) break; // net contents
+        if (businessPatterns.some((bp) => bp.test(l))) {
+          companyIdx = k;
+          break;
+        }
+      }
+      if (companyIdx >= 0) {
+        return [lines[companyIdx], lines[i]].join(', ');
+      }
+      // Fall back to immediate previous line
+      const prev = i - 1 >= 0 && !isGovWarningLine(i - 1) && lines[i - 1].trim().length > 0 ? i - 1 : i;
       return lines.slice(prev, i + 1).join(', ');
     }
   }
 
   // Fallback: look for known business suffixes
-  const businessPatterns = [/Distiller[yies]+/i, /Winery/i, /Brewing\s*Co/i, /Bottled\s+by/i, /Produced\s+by/i];
   for (let i = 0; i < lines.length; i++) {
     if (isGovWarningLine(i)) continue;
     for (const bp of businessPatterns) {
