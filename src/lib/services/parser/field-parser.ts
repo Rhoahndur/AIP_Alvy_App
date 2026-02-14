@@ -14,7 +14,8 @@ function isArtifactLine(line: string): boolean {
   const stripped = line.trim();
   if (stripped.length === 0) return true;
   // Keep lines that look like measurements (net contents, ABV, etc.)
-  if (/\d+\.?\d*\s*(%|mL|ml|L|FL|OZ|oz|Proof)/i.test(stripped)) return false;
+  // Accept 0Z as OCR misread of OZ
+  if (/\d+\.?\d*\s*(%|mL|ml|L|FL|[O0]Z|oz|Proof)/i.test(stripped)) return false;
   // Count alphabetic characters that form real words (3+ alpha chars in a row)
   const realWords = stripped.match(/[a-zA-Z]{3,}/g);
   if (!realWords) return true; // no real words at all
@@ -56,13 +57,16 @@ function extractAlcoholContent(text: string): string | null {
 }
 
 function extractNetContents(text: string): string | null {
-  const pattern = /(\d+\.?\d*)\s*(mL|ml|L|l|FL\.?\s*OZ\.?|fl\.?\s*oz\.?)/i;
+  // OCR commonly misreads O as 0 in "OZ", so accept both
+  const pattern = /(\d+\.?\d*)\s*(mL|ml|L|l|FL\.?\s*[O0]Z\.?|fl\.?\s*[o0]z\.?)/i;
   const match = text.match(pattern);
-  return match ? match[0].trim() : null;
+  if (!match) return null;
+  // Normalize OCR misreads: "0Z" → "OZ"
+  return match[0].trim().replace(/0Z/g, 'OZ').replace(/0z/g, 'oz');
 }
 
 function extractGovernmentWarning(text: string): string | null {
-  const anchorPattern = /GOVERNMENT\s*WARNING/i;
+  const anchorPattern = /['"]?\s*GOVERNMENT\s*WARNING/i;
   const anchorMatch = text.match(anchorPattern);
   if (!anchorMatch || anchorMatch.index === undefined) return null;
 
@@ -166,11 +170,24 @@ function extractVintageDate(text: string): string | null {
 function extractBrandName(text: string, classType: string | null): string | null {
   const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
 
+  // Identify the government warning block (anchor line + all continuation lines)
+  const govStartIdx = lines.findIndex((l) => /GOVERNMENT\s*WARNING/i.test(l));
+  let govEndIdx = govStartIdx;
+  if (govStartIdx >= 0) {
+    for (let j = govStartIdx + 1; j < lines.length; j++) {
+      if (/health\s+problems/i.test(lines[j])) { govEndIdx = j; break; }
+      govEndIdx = j;
+    }
+  }
+  const isGovBlock = (i: number) => govStartIdx >= 0 && i >= govStartIdx && i <= govEndIdx;
+
   // Helper: check if a line is a known non-brand field
   const isKnownField = (line: string): boolean => {
     if (/^\d+\.?\d*\s*%/i.test(line)) return true; // ABV
     if (/^\d+\s*(mL|L|FL)/i.test(line)) return true; // Net contents
     if (/GOVERNMENT\s*WARNING/i.test(line)) return true;
+    if (/Surgeon\s*General/i.test(line)) return true; // gov warning continuation
+    if (/birth\s*defects|impairs|health\s*problems/i.test(line)) return true; // gov warning body
     if (/Product\s+of/i.test(line)) return true;
     if (/Imported/i.test(line)) return true;
     if (/\b[A-Z]{2}\s+\d{5}\b/.test(line)) return true; // address with ZIP
@@ -180,9 +197,11 @@ function extractBrandName(text: string, classType: string | null): string | null
   };
 
   // Pass 1: Brand name is typically the first significant line of text
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     if (line.length < 2) continue;
     if (isArtifactLine(line)) continue;
+    if (isGovBlock(i)) continue; // skip entire government warning block
     if (/^[—\-–|_'"]/.test(line)) continue; // starts with dash/punctuation
     if (isKnownField(line)) continue;
 
@@ -198,8 +217,10 @@ function extractBrandName(text: string, classType: string | null): string | null
 
   // Pass 2: If first-line heuristic failed, look for a capitalized multi-word
   // phrase that isn't a known field (brand names are often in ALL CAPS)
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     if (isArtifactLine(line)) continue;
+    if (isGovBlock(i)) continue;
     if (isKnownField(line)) continue;
     const normalized = normalizeText(line);
     // Look for lines that are mostly uppercase words (typical brand name styling)
