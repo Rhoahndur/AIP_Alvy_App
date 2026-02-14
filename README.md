@@ -14,10 +14,12 @@ An automated prototype that ingests alcohol beverage label applications, perform
 - [Architecture](#architecture)
 - [Tech Stack](#tech-stack)
 - [Getting Started](#getting-started)
+- [Usage Guide](#usage-guide)
 - [Running Tests](#running-tests)
 - [Deployment](#deployment)
 - [Production Scaling Path](#production-scaling-path)
 - [Security & Compliance Roadmap](#security--compliance-roadmap)
+- [Known Limitations](#known-limitations)
 - [Future Enhancements](#future-enhancements)
 
 ---
@@ -38,7 +40,9 @@ This prototype automates that matching work:
 - **Single & batch submission** — Web form for individual applications, CSV + multi-image upload for batch
 - **Sub-5-second processing** — Image preprocessing + OCR + field parsing + matching in under 5 seconds per label
 - **10-field verification** — 7 universal fields + 3 wine-only fields (appellation, varietal, vintage)
-- **Smart matching** — Exact match for government warning, fuzzy Levenshtein matching with confidence scores for other fields, numeric tolerance for ABV and net contents
+- **Dual-pass OCR** — Padded pass for character accuracy + unpadded recovery pass for faint text, merged with deduplication
+- **Artifact filtering** — Heuristic detection removes OCR noise from decorative label elements (low character diversity, non-word fragments, low alpha density)
+- **Smart matching** — Exact match for government warning, fuzzy Levenshtein matching with confidence scores for other fields, numeric tolerance for ABV and net contents, reverse lookup matching against raw OCR text
 - **Manual override** — Agent can override any auto-result per field with a reason, then approve or reject the application
 - **Accessible UI** — WCAG AA color contrast, keyboard navigation, ARIA labels, skip-to-content, large click targets
 
@@ -82,14 +86,22 @@ The application follows a modular, provider-pattern architecture. Each major con
 ### Verification Pipeline (Per Image)
 
 ```
-Image → Preprocess (sharp: grayscale, contrast, sharpen, resize)
-      → OCR (Tesseract.js, pre-warmed worker)
+Image → Dual-Pass OCR
+        ├─ Pass 1: Standard preprocess (grayscale, normalize, sharpen, 20px pad) + PSM AUTO
+        └─ Pass 2: Standard preprocess (grayscale, normalize, sharpen, NO pad) + PSM AUTO
+      → Merge (padded text primary + unique unpadded recovery lines)
+      → Artifact Filter (remove OCR noise from decorative label elements)
       → Parse (regex + keyword heuristics → 10 structured fields)
+      → Reverse Lookup (search raw OCR text for expected form values)
       → Match (exact for gov. warning, fuzzy for rest, numeric tolerance for ABV)
       → Result (AUTO_PASS if all fields match, AUTO_FAIL if any mismatch)
 
 Target: < 5 seconds total (hard requirement)
 ```
+
+**Dual-pass OCR:** Pass 1 uses standard preprocessing with 20px white border padding (resize → grayscale → normalize → sharpen → pad). Padding fixes character-level misreads near image edges (e.g., "o" → "a" on small text). Pass 2 uses the same preprocessing *without* padding to recover faint text (e.g., light address lines on dark backgrounds) that padding causes Tesseract to skip. Results are merged: padded output is primary (better character accuracy), unique lines from the unpadded pass are appended as supplemental text.
+
+**Reverse lookup matching:** After heuristic field parsing, each expected form value is searched for verbatim in the raw OCR text (case-insensitive, whitespace-normalized). A substring match in raw text overrides the parser's heuristic extraction, improving accuracy when the parser assigns text to the wrong field.
 
 ### Provider Pattern
 
@@ -97,7 +109,7 @@ The architecture supports swapping components without refactoring:
 
 | Interface | MVP Provider | Future Options |
 |-----------|-------------|----------------|
-| `OCRProvider` | Tesseract.js + sharp | Claude Vision, GPT-4o, Azure Document Intelligence |
+| `OCRProvider` | Tesseract.js (best_int LSTM) + sharp | Claude Vision, GPT-4o, Azure Document Intelligence |
 | `MatchingEngine` | Algorithmic (Levenshtein + regex) | LLM-based semantic comparison |
 | `IngestionProvider` | CSV parser | TTB Form 5100.31 PDF/DOCX parser |
 | `StorageProvider` | Vercel Blob | Azure Blob Storage (FedRAMP) |
@@ -109,7 +121,7 @@ The architecture supports swapping components without refactoring:
 | Layer | Technology | Why |
 |-------|-----------|-----|
 | **Framework** | Next.js 16 (App Router) | Fullstack React — frontend + API routes in one codebase. App Router for modern React Server Components and streaming. |
-| **OCR Engine** | Tesseract.js 7 (fast model) | Free, local OCR. No API keys, no external service calls. Runs entirely within serverless functions. No network firewall issues for federal deployment. |
+| **OCR Engine** | Tesseract.js 7 (`tessdata_best` int-quantized LSTM) | Free, local OCR. No API keys, no external service calls. Runs entirely within serverless functions. No network firewall issues for federal deployment. Uses the highest-accuracy integer-quantized model via `OEM.LSTM_ONLY`. |
 | **Image Preprocessing** | sharp | Native C++ bindings for sub-100ms grayscale, contrast enhancement, sharpening, and resize. Dramatically improves OCR accuracy on degraded images. |
 | **Database** | Vercel Postgres (Neon) | Managed PostgreSQL with serverless driver. Free tier sufficient for prototype (256 MB). |
 | **ORM** | Prisma 7 | Type-safe database queries, automatic migrations, schema-first design. Uses `@prisma/adapter-neon` for serverless connection pooling. |
@@ -190,6 +202,50 @@ This creates 9 sample applications (3 spirits, 3 wine, 3 malt beverage) from the
 
 ---
 
+## Usage Guide
+
+Once the app is running at [http://localhost:3000](http://localhost:3000), you'll land on the **Queue** page. The four pages map to the core workflow: **Submit → Queue → Review → History**.
+
+### 1. Submit an Application
+
+Navigate to `/submit`. You can submit in two ways:
+
+**Single application:**
+1. Select the beverage type (Spirits, Wine, or Malt Beverage). Wine adds three extra fields: appellation, varietal, and vintage.
+2. Fill in the application fields — brand name, class/type, alcohol content, net contents, name & address, country of origin, and government warning (auto-populated with the standard text).
+3. Upload a label image (PNG, JPG — max 4.5 MB).
+4. Click **Submit**. The application is created with PENDING status and appears in the queue.
+
+**Batch upload:**
+1. Toggle to **Batch Upload** mode.
+2. Upload a CSV file with columns: `image_filename`, `beverage_type`, `brand_name`, `class_type`, `alcohol_content`, `net_contents`, `name_address`, `government_warning`, `country_of_origin`, `appellation`, `varietal`, `vintage`.
+3. Upload the corresponding label images. The system pairs each CSV row to its image by matching the `image_filename` column (case-insensitive).
+4. Review the pairing preview, then click **Submit Batch**.
+
+### 2. Verify from the Queue
+
+Navigate to `/queue` to see all PENDING applications.
+
+- Click **Verify** on a single application to run the OCR pipeline on that label.
+- Click **Verify All** to process every pending application in sequence (a progress bar tracks completion).
+
+Verification runs the full pipeline per label: image preprocessing → dual-pass OCR → field parsing → reverse lookup → matching. Each field gets a result: **MATCH**, **PARTIAL**, **MISMATCH**, or **NOT_FOUND**. The overall result is **AUTO_PASS** (all fields match) or **AUTO_FAIL** (any field fails).
+
+### 3. Review Results
+
+Click any verified application to open its detail page at `/application/[id]`.
+
+- The left panel shows the submitted application data; the right panel displays the label image.
+- Each of the 10 fields shows the expected value vs. extracted value, the auto-result, and a confidence score.
+- To override a field result, select a new result and provide a reason.
+- When ready, choose **Approve** (MANUAL_PASS) or **Reject** (MANUAL_FAIL), optionally add notes, and click **Submit Review**.
+
+### 4. Browse History
+
+Navigate to `/history` to see all completed (MANUALLY_REVIEWED) applications. Results are browsable and filterable.
+
+---
+
 ## Running Tests
 
 The test suite includes 77 tests across unit, integration, and performance categories.
@@ -259,12 +315,15 @@ The project includes a `vercel.json` for serverless function settings:
   "functions": {
     "src/app/api/verify/route.ts": {
       "maxDuration": 60
+    },
+    "src/app/api/applications/batch/route.ts": {
+      "maxDuration": 30
     }
   }
 }
 ```
 
-The verify endpoint gets an extended timeout (60s) to accommodate OCR processing, especially for batch operations.
+The verify endpoint gets an extended timeout (60s) to accommodate OCR processing. The batch upload endpoint gets 30s for CSV parsing and multi-image ingestion.
 
 ### Post-Deployment
 
@@ -323,6 +382,19 @@ This section documents what would be required for production federal deployment.
 2. **Audit-ready data model** — FieldResult records with overrides and reasons
 3. **Section 508 from day one** — semantic HTML, ARIA, keyboard navigation
 4. **No external API dependencies in OCR** — Tesseract.js runs locally, no firewall issues
+
+---
+
+## Known Limitations
+
+| Limitation | Impact | Mitigation |
+|------------|--------|------------|
+| **Tesseract.js character-level accuracy** | Small or stylized text on dark/textured backgrounds can produce character-level errors (e.g., "not" → "nat", "lf" → "1f"). Accuracy degrades further with decorative fonts. | Padded preprocessing fixes edge misreads; unpadded recovery pass catches faint text. Artifact filtering removes noise. |
+| **Government warning exact match** | The government warning field uses exact substring matching. Any single OCR misread in the warning text causes AUTO_FAIL, even when the warning is physically present on the label. | Applications that fail on government warning alone are routed to manual review where agents can override. |
+| **Heuristic field parsing** | Regex-based field extraction assumes common label layouts. Unusual label designs may cause fields to be assigned incorrectly or missed. | Reverse lookup matching catches cases where the parser misassigns text but the expected value exists in the raw OCR output. |
+| **CSV-only batch ingestion** | Batch upload requires a specific CSV format. No support for TTB Form 5100.31 (PDF/DOCX) yet. | `IngestionProvider` interface supports adding new format parsers without changing the pipeline. |
+
+**Upgrade path:** LLM-based OCR (Claude Vision, GPT-4o, Azure Document Intelligence) via the `OCRProvider` interface would dramatically improve character-level accuracy and eliminate most of the above limitations. The provider pattern enables this swap without refactoring consuming code.
 
 ---
 
