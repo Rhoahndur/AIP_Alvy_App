@@ -7,7 +7,7 @@ export const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png'] as const;
 export const ACCEPTED_IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png'] as const;
 export const MAX_IMAGE_SIZE_BYTES = 4.5 * 1024 * 1024; // 4.5 MB (Vercel limit)
 
-export const MAX_IMAGE_WIDTH = 1500; // Resize to this max width before OCR
+export const OCR_IMAGE_WIDTH = 3000; // Target width for OCR — upscale so small text (gov warnings) has ~30-40px cap height
 
 export const PROCESSING_TIMEOUT_MS = 5000; // Hard requirement: < 5 seconds
 

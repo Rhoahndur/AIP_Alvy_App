@@ -1,20 +1,25 @@
 import sharp from 'sharp';
-import { MAX_IMAGE_WIDTH } from '@/lib/constants';
+import { OCR_IMAGE_WIDTH } from '@/lib/constants';
 
 /**
- * Standard preprocessing — gentle, preserves text fidelity.
+ * Standard preprocessing — upscale + sharpen + threshold.
  * Used for the primary OCR pass (PSM 3 structured reading).
+ *
+ * Key: upscaling to 3000px ensures small text (government warnings)
+ * has sufficient pixel height (~30-40px) for reliable character recognition.
+ * Thresholding creates clean binary image (pure black/white) which
+ * eliminates "o→a" type confusions from partial fills.
  */
 export async function preprocessImage(imageBuffer: Buffer): Promise<Buffer> {
   return sharp(imageBuffer)
     .resize({
-      width: MAX_IMAGE_WIDTH,
-      withoutEnlargement: true,
+      width: OCR_IMAGE_WIDTH,
       fit: 'inside',
     })
     .grayscale()
     .normalize()
     .sharpen({ sigma: 1.0 })
+    .threshold(128)   // binary image — clean edges, no ambiguous gray pixels
     .png()
     .toBuffer();
 }
@@ -31,8 +36,7 @@ export async function preprocessImage(imageBuffer: Buffer): Promise<Buffer> {
 export async function preprocessImageEnhanced(imageBuffer: Buffer): Promise<Buffer> {
   const grayscale = await sharp(imageBuffer)
     .resize({
-      width: MAX_IMAGE_WIDTH,
-      withoutEnlargement: true,
+      width: OCR_IMAGE_WIDTH,
       fit: 'inside',
     })
     .grayscale()
@@ -50,11 +54,13 @@ export async function preprocessImageEnhanced(imageBuffer: Buffer): Promise<Buff
     .composite([{ input: grayscale, blend: 'difference' }])
     .toBuffer();
 
-  // Negate so text is dark on white background (what Tesseract prefers)
+  // Negate so text is dark on white background (what Tesseract prefers),
+  // then threshold for clean binary output
   return sharp(subtracted)
     .negate()
     .normalize()
     .sharpen({ sigma: 1.0 })
+    .threshold(128)
     .png()
     .toBuffer();
 }
