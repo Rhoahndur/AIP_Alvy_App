@@ -13,17 +13,19 @@ function normalizeText(text: string): string {
 function isArtifactLine(line: string): boolean {
   const stripped = line.trim();
   if (stripped.length === 0) return true;
+  // Exemptions first — these are never artifacts
+  // Keep lines that are a vintage year (e.g., "2021")
+  if (/^(19|20)\d{2}$/.test(stripped)) return false;
+  // Keep lines that look like measurements (net contents, ABV, etc.)
+  // Accept 0Z as OCR misread of OZ
+  if (/\d+\.?\d*\s*(%|mL|ml|L|FL|[O0]Z|oz|Proof)/i.test(stripped)) return false;
+  // Now apply artifact detection
   // Repeated/low-diversity characters (e.g., "EEE", "RR RRRRRREEEE") — OCR artifact
   const alphaOnly = stripped.replace(/[^a-zA-Z]/g, '').toLowerCase();
   const uniqueAlpha = new Set(alphaOnly);
   if (uniqueAlpha.size <= 2) return true;
   // Long strings with very low character diversity relative to length — OCR noise
   if (alphaOnly.length > 10 && uniqueAlpha.size < alphaOnly.length / 5) return true;
-  // Keep lines that are a vintage year (e.g., "2021")
-  if (/^(19|20)\d{2}$/.test(stripped)) return false;
-  // Keep lines that look like measurements (net contents, ABV, etc.)
-  // Accept 0Z as OCR misread of OZ
-  if (/\d+\.?\d*\s*(%|mL|ml|L|FL|[O0]Z|oz|Proof)/i.test(stripped)) return false;
   // Count alphabetic characters that form real words (3+ alpha chars in a row)
   const realWords = stripped.match(/[a-zA-Z]{3,}/g);
   if (!realWords) return true; // no real words at all
@@ -191,6 +193,7 @@ function extractBrandName(text: string, classType: string | null): string | null
 
   // Helper: check if a line is a known non-brand field
   const isKnownField = (line: string): boolean => {
+    if (/^(19|20)\d{2}$/.test(line.trim())) return true; // vintage year
     if (/^\d+\.?\d*\s*%/i.test(line)) return true; // ABV
     if (/^\d+\s*(mL|L|FL)/i.test(line)) return true; // Net contents
     if (/GOVERNMENT\s*WARNING/i.test(line)) return true;

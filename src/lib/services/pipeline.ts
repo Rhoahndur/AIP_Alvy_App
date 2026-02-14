@@ -38,14 +38,14 @@ function reverseMatch(
   ];
 
   for (const field of fieldsToCheck) {
-    // Only apply reverse lookup if the parser failed to extract
-    if (patched[field]) continue;
     const expectedValue = expected[field];
     if (!expectedValue) continue;
 
     const normalizedExpected = expectedValue.toLowerCase().replace(/\s+/g, ' ');
     if (normalizedRaw.includes(normalizedExpected)) {
-      // The expected value appears verbatim in the OCR text — use it
+      // The expected value appears verbatim in the OCR text — always use it.
+      // A verbatim match in the raw text is stronger evidence than whatever
+      // the heuristic parser extracted (which may be garbage like "STO ow").
       patched[field] = expectedValue;
     }
   }
